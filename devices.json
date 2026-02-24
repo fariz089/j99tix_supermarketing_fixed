@@ -1,0 +1,705 @@
+[
+  {
+    "device": "192.168.1.147:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 1
+  },
+  {
+    "device": "192.168.1.148:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 2
+  },
+  {
+    "device": "192.168.1.149:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 3
+  },
+  {
+    "device": "192.168.1.150:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 4
+  },
+  {
+    "device": "192.168.1.151:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 5
+  },
+  {
+    "device": "192.168.1.152:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 6
+  },
+  {
+    "device": "192.168.1.153:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 7
+  },
+  {
+    "device": "192.168.1.154:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 8
+  },
+  {
+    "device": "192.168.1.155:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 9
+  },
+  {
+    "device": "192.168.1.156:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 10
+  },
+  {
+    "device": "192.168.1.157:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 11
+  },
+  {
+    "device": "192.168.1.158:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 12
+  },
+  {
+    "device": "192.168.1.159:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 13
+  },
+  {
+    "device": "192.168.1.160:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 14
+  },
+  {
+    "device": "192.168.1.161:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 15
+  },
+  {
+    "device": "192.168.1.162:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 16
+  },
+  {
+    "device": "192.168.1.163:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 17
+  },
+  {
+    "device": "192.168.1.164:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 18
+  },
+  {
+    "device": "192.168.1.165:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 19
+  },
+  {
+    "device": "192.168.1.167:5555",
+    "model": "X8",
+    "manufacturer": "EVERCOSS",
+    "resolution": "800x1280",
+    "number": 20
+  },
+
+  {
+    "device": "192.168.1.193:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 21
+  },
+  {
+    "device": "192.168.1.194:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 22
+  },
+  {
+    "device": "192.168.1.195:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 23
+  },
+  {
+    "device": "192.168.1.196:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 24
+  },
+  {
+    "device": "192.168.1.197:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 25
+  },
+  {
+    "device": "192.168.1.198:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 26
+  },
+  {
+    "device": "192.168.1.199:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 27
+  },
+  {
+    "device": "192.168.1.200:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 28
+  },
+  {
+    "device": "192.168.1.201:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 29
+  },
+  {
+    "device": "192.168.1.202:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 30
+  },
+  {
+    "device": "192.168.1.203:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 31
+  },
+  {
+    "device": "192.168.1.204:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 32
+  },
+  {
+    "device": "192.168.1.205:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 33
+  },
+  {
+    "device": "192.168.1.206:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 34
+  },
+  {
+    "device": "192.168.1.207:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 35
+  },
+  {
+    "device": "192.168.1.208:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 36
+  },
+  {
+    "device": "192.168.1.209:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 37
+  },
+  {
+    "device": "192.168.1.210:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 38
+  },
+  {
+    "device": "192.168.1.211:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 39
+  },
+  {
+    "device": "192.168.1.212:5555",
+    "model": "PDEM10",
+    "manufacturer": "OPPO",
+    "resolution": "1440x3168",
+    "number": 40
+  },
+
+  {
+    "device": "192.168.1.214:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 41
+  },
+  {
+    "device": "192.168.1.215:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 42
+  },
+  {
+    "device": "192.168.1.217:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 43
+  },
+  {
+    "device": "192.168.1.218:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 44
+  },
+  {
+    "device": "192.168.1.222:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 45
+  },
+  {
+    "device": "192.168.1.226:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 46
+  },
+  {
+    "device": "192.168.1.230:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 47
+  },
+  {
+    "device": "192.168.1.233:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 48
+  },
+  {
+    "device": "192.168.1.234:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 49
+  },
+  {
+    "device": "192.168.1.236:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 50
+  },
+  {
+    "device": "192.168.1.239:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 51
+  },
+  {
+    "device": "192.168.1.240:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 52
+  },
+  {
+    "device": "192.168.1.241:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 53
+  },
+  {
+    "device": "192.168.1.242:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 54
+  },
+  {
+    "device": "192.168.1.243:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 55
+  },
+  {
+    "device": "192.168.1.245:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 56
+  },
+  {
+    "device": "192.168.1.247:5555",
+    "model": "SM-G973F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 57
+  },
+
+  {
+    "device": "192.168.1.173:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 58
+  },
+  {
+    "device": "192.168.1.174:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 59
+  },
+  {
+    "device": "192.168.1.175:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 60
+  },
+  {
+    "device": "192.168.1.176:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 61
+  },
+  {
+    "device": "192.168.1.177:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 62
+  },
+  {
+    "device": "192.168.1.178:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 63
+  },
+  {
+    "device": "192.168.1.179:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 64
+  },
+  {
+    "device": "192.168.1.180:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 65
+  },
+  {
+    "device": "192.168.1.181:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 66
+  },
+  {
+    "device": "192.168.1.182:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 67
+  },
+  {
+    "device": "192.168.1.183:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 68
+  },
+  {
+    "device": "192.168.1.184:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 69
+  },
+  {
+    "device": "192.168.1.185:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 70
+  },
+  {
+    "device": "192.168.1.186:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 71
+  },
+  {
+    "device": "192.168.1.187:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 72
+  },
+  {
+    "device": "192.168.1.188:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 73
+  },
+  {
+    "device": "192.168.1.189:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 74
+  },
+  {
+    "device": "192.168.1.190:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 75
+  },
+  {
+    "device": "192.168.1.191:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 76
+  },
+  {
+    "device": "192.168.1.192:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 77
+  },
+  {
+    "device": "192.168.1.213:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 78
+  },
+  {
+    "device": "192.168.1.216:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 79
+  },
+  {
+    "device": "192.168.1.219:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 80
+  },
+  {
+    "device": "192.168.1.220:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 81
+  },
+  {
+    "device": "192.168.1.221:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 82
+  },
+  {
+    "device": "192.168.1.223:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 83
+  },
+  {
+    "device": "192.168.1.224:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 84
+  },
+  {
+    "device": "192.168.1.225:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 85
+  },
+  {
+    "device": "192.168.1.227:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 86
+  },
+  {
+    "device": "192.168.1.228:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 87
+  },
+  {
+    "device": "192.168.1.229:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 88
+  },
+  {
+    "device": "192.168.1.231:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 89
+  },
+  {
+    "device": "192.168.1.232:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 90
+  },
+  {
+    "device": "192.168.1.235:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 91
+  },
+  {
+    "device": "192.168.1.237:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 92
+  },
+  {
+    "device": "192.168.1.238:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 93
+  },
+  {
+    "device": "192.168.1.244:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 94
+  },
+  {
+    "device": "192.168.1.246:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 95
+  },
+  {
+    "device": "192.168.1.248:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 96
+  },
+  {
+    "device": "192.168.1.249:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 97
+  },
+  {
+    "device": "192.168.1.250:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 98
+  },
+  {
+    "device": "192.168.1.251:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 99
+  },
+  {
+    "device": "192.168.1.252:5555",
+    "model": "SM-G975F",
+    "manufacturer": "samsung",
+    "resolution": "1080x2280",
+    "number": 100
+  }
+]

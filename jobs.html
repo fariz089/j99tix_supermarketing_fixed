@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Job Manager - J99Tix</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="container">
+    <h1>Job Queue Manager</h1>
+
+    <!-- Job Management Section (NEW) -->
+    <div class="section"
+      style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%); border: 1px solid rgba(239, 68, 68, 0.3);">
+      <h2>Job Management</h2>
+
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px;">
+        <button onclick="cancelAllJobs()" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+          Cancel All Active Jobs
+        </button>
+        <button onclick="deleteAllJobs()" class="danger">
+          Delete All Jobs
+        </button>
+      </div>
+
+      <div id="job-mgmt-status"
+        style="padding: 12px; background: rgba(17, 24, 39, 0.6); border-radius: 8px; font-size: 13px; color: #94a3b8; min-height: 40px; display: none;">
+      </div>
+
+      <div style="font-size: 12px; color: #94a3b8; margin-top: 8px;">
+        <strong>Cancel:</strong> Stop all running/pending jobs<br>
+        <strong>Delete:</strong> Remove all jobs from database (including completed)
+      </div>
+    </div>
+
+    <!-- Jobs List Section -->
+    <div class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Active Jobs</h2>
+        <button onclick="refreshJobs()">Refresh</button>
+      </div>
+
+      <div id="job-list"></div>
+    </div>
+  </div>
+
+  <script src="jobs-renderer.js"></script>
+</body>
+
+</html>

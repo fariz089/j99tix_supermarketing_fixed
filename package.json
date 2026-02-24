@@ -1,0 +1,27 @@
+{
+  "name": "j99tix",
+  "version": "2.0.0",
+  "description": "J99Tix - Electron Multi-Device Manager with Scrcpy",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "electron",
+    "scrcpy",
+    "android",
+    "device-manager"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^28.0.0",
+    "sharp": "^0.33.5",
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9"
+  }
+}

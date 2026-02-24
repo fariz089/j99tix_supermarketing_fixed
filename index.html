@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J99Tix - Create Jobs</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎬 J99Tix - Create Jobs</h1>
+
+        <!-- Quick Access Buttons -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px;">
+            <button onclick="openMonitorWindow()" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                📱 Device Monitor
+            </button>
+            <button onclick="openWorkerWindow()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                ⚙️ Workers Monitor
+            </button>
+            <button onclick="openJobWindow()" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                📊 Job Queue
+            </button>
+        </div>
+
+        <!-- Create Job Section -->
+        <div class="section">
+            <h2>➕ Create New Job</h2>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="supermarketing">📊 Super Marketing</button>
+                <button class="tab" data-tab="warmup">🔥 Warmup</button>
+                <button class="tab" data-tab="boostlive">🎥 Boost Live</button>
+                <button class="tab" data-tab="masscomment">💬 Mass Comment</button>
+            </div>
+
+            <!-- Super Marketing Tab -->
+            <div class="tab-content active" id="supermarketing">
+                <div class="form-group">
+                    <label>🔗 TikTok Video URLs (one per line)</label>
+                    <textarea id="sm_url" rows="5" placeholder="https://www.tiktok.com/@user/video/123456789
+https://www.tiktok.com/@user/video/987654321
+https://www.tiktok.com/@user/video/111222333" style="resize: vertical;"></textarea>
+                    <small style="color: #888; font-size: 12px;">💡 Enter multiple URLs (one per line). Each URL will be
+                        opened in random order with random watch duration.</small>
+                </div>
+                <div class="form-group">
+                    <label>🔄 Target Cycles</label>
+                    <input type="number" id="sm_target" value="100" min="1">
+                </div>
+                <div class="form-group">
+                    <label>⏱️ Watch Duration (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="sm_watch_min" value="5" min="1">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="sm_watch_max" value="60" min="1">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>⏸️ Idle Delay Before Start (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="sm_idle_min" value="2" min="0">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="sm_idle_max" value="5" min="0">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>📜 Max Scroll Count (simulate FYP browsing)</label>
+                    <input type="number" id="sm_scroll_count" value="5" min="0" max="20">
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Will scroll randomly between 0 to this number
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>⏱️ Delay Per Scroll (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="sm_scroll_delay_min" value="2" min="1">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="sm_scroll_delay_max" value="5" min="1">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>🔗 Delay Before Opening Target URL (seconds)</label>
+                    <input type="number" id="sm_open_delay" value="2" min="0" max="10">
+                </div>
+                <div class="form-group">
+                    <label>❤️ Like Settings</label>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="sm_like_enabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #e4e9f7;">Enable Random Likes</span>
+                    </div>
+                    <div id="sm_like_settings">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Double Tap % (Like)</label>
+                            <input type="number" id="sm_like_chance" value="5" min="0" max="100">
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                        💡 Double tap di tengah layar untuk like video (otomatis adaptif per device)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>📱 Select Devices (<span id="sm_count">0</span> selected)</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <button onclick="selectAllDevices('sm')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            ✅ Select All
+                        </button>
+                        <button onclick="deselectAllDevices('sm')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);">
+                            ❌ Clear All
+                        </button>
+                        <button onclick="toggleDeviceView('sm')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); margin-left: auto;">
+                            👁️ Toggle View
+                        </button>
+                    </div>
+                    <div id="sm_devices" class="device-selector-v2"></div>
+                </div>
+
+                <!-- Summary Preview -->
+                <div
+                    style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 14px; color: #a5b4fc; margin-bottom: 8px;">📋 Task Flow:</div>
+                    <div style="font-size: 13px; color: #e4e9f7; line-height: 1.8;">
+                        1. 🧹 Clear TikTok<br>
+                        2. ⏸️ Idle <span id="sm_preview_idle">2-5s</span><br>
+                        3. 📱 Open TikTok<br>
+                        4. 📜 Scroll FYP <span id="sm_preview_scroll">0-5x</span> (delay: <span
+                            id="sm_preview_scroll_delay">2-5s</span>)<br>
+                        5. 🎯 Open target video<br>
+                        6. 👁️ Watch <span id="sm_preview_watch">5-60s</span><br>
+                        7. 🧹 Clear TikTok
+                    </div>
+                </div>
+
+
+                <button onclick="createSuperMarketingJob()">🚀 Create Super Marketing Job</button>
+            </div>
+
+            <!-- Warmup Tab -->
+            <div class="tab-content" id="warmup">
+                <div class="form-group">
+                    <label>⏱️ Duration (seconds)</label>
+                    <input type="number" id="wu_duration" value="3600" min="60">
+                </div>
+                <div class="form-group">
+                    <label>🎯 Action Percentages</label>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">👁️ View %</label>
+                            <input type="number" id="wu_view" value="100" min="0" max="100">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">❤️ Like %</label>
+                            <input type="number" id="wu_like" value="30" min="0" max="100">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">💬 Comment %</label>
+                            <input type="number" id="wu_comment" value="10" min="0" max="100">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">🔄 Share %</label>
+                            <input type="number" id="wu_share" value="5" min="0" max="100">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>📱 Select Devices (<span id="wu_count">0</span> selected)</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <button onclick="selectAllDevices('wu')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            ✅ Select All
+                        </button>
+                        <button onclick="deselectAllDevices('wu')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);">
+                            ❌ Clear All
+                        </button>
+                        <button onclick="toggleDeviceView('wu')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); margin-left: auto;">
+                            👁️ Toggle View
+                        </button>
+                    </div>
+                    <div id="wu_devices" class="device-selector-v2"></div>
+                </div>
+                <button onclick="createWarmupJob()">🚀 Create Warmup Job</button>
+            </div>
+
+            <!-- Boost Live Tab -->
+            <div class="tab-content" id="boostlive">
+                <div class="form-group">
+                    <label>🔗 Live Stream URL</label>
+                    <input type="text" id="bl_url" placeholder="https://www.tiktok.com/@user/live">
+                </div>
+
+                <div class="form-group">
+                    <label>👤 Username (optional)</label>
+                    <input type="text" id="bl_username" placeholder="@username">
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Will be used if URL doesn't work
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>⏱️ Watch Duration (seconds)</label>
+                    <input type="number" id="bl_duration" value="1800" min="60">
+                </div>
+
+                <div class="form-group">
+                    <label>💬 Custom Comments (one per line)</label>
+                    <textarea id="bl_comments" rows="6"
+                        placeholder="Mantap live nya! 🔥&#10;Keren banget! ❤️&#10;Sukses terus!&#10;Amazing content! 👏&#10;Keep it up! 💪"></textarea>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Each comment will be used only once across all devices
+                    </div>
+                </div>
+
+                <!-- Sequential Join Delay -->
+                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 14px; color: #93c5fd; margin-bottom: 12px; font-weight: 600;">🚪 Sequential Join Settings</div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>⏱️ Delay Between Each Device Joining (seconds)</label>
+                        <input type="number" id="bl_join_delay" value="3" min="0" max="300">
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                            💡 Device 1 joins at 0s, Device 2 at 3s, Device 3 at 6s, etc. Set 0 for simultaneous join.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>🎯 Action Percentages (% chance per interval)</label>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">👆 Tap Screen %</label>
+                            <input type="number" id="bl_tap" value="15" min="0" max="100">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">❤️ Like %</label>
+                            <input type="number" id="bl_like" value="30" min="0" max="100">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">💬 Comment %</label>
+                            <input type="number" id="bl_comment" value="10" min="0" max="100">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">🔄 Share %</label>
+                            <input type="number" id="bl_share" value="5" min="0" max="100">
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                        💡 Actions will be randomly triggered throughout watch duration
+                    </div>
+                </div>
+
+                <!-- Like Settings -->
+                <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="bl_like_enabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #fca5a5; font-weight: 600; font-size: 14px;">❤️ Like</span>
+                    </div>
+                    <div id="bl_like_settings">
+                        <label style="font-size: 12px; color: #64748b;">Delay Between Each Device Liking (seconds)</label>
+                        <input type="number" id="bl_like_delay" value="2" min="0" max="300">
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                            💡 Device 1 likes at 0s, Device 2 at 2s, Device 3 at 4s, etc.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comment Settings -->
+                <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="bl_comment_enabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #c4b5fd; font-weight: 600; font-size: 14px;">💬 Comment</span>
+                    </div>
+                    <div id="bl_comment_settings">
+                        <label style="font-size: 12px; color: #64748b;">Delay Between Each Device Commenting (seconds)</label>
+                        <input type="number" id="bl_comment_delay" value="3" min="0" max="300">
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                            💡 Device 1 comments at 0s, Device 2 at 3s, Device 3 at 6s, etc.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Share Settings -->
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="bl_share_enabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #6ee7b7; font-weight: 600; font-size: 14px;">🔄 Share</span>
+                    </div>
+                    <div id="bl_share_settings">
+                        <label style="font-size: 12px; color: #64748b;">Delay Between Each Device Sharing (seconds)</label>
+                        <input type="number" id="bl_share_delay" value="2" min="0" max="300">
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                            💡 Device 1 shares at 0s, Device 2 at 2s, Device 3 at 4s, etc.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>⏱️ Action Check Interval (seconds)</label>
+                    <input type="number" id="bl_interval" value="10" min="3" max="30">
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 How often to check if action should be performed
+                    </div>
+                </div>
+
+                <!-- Idle Delay -->
+                <div class="form-group">
+                    <label>⏸️ Idle Delay Before Opening (seconds)</label>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min Delay</label>
+                            <input type="number" id="bl_idle_min" value="2" min="0" max="30">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max Delay</label>
+                            <input type="number" id="bl_idle_max" value="5" min="0" max="30">
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Random delay added ON TOP of sequential join delay (more natural)
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>📱 Select Devices (<span id="bl_count">0</span> selected)</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <button onclick="selectAllDevices('bl')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            ✅ Select All
+                        </button>
+                        <button onclick="deselectAllDevices('bl')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);">
+                            ❌ Clear All
+                        </button>
+                        <button onclick="toggleDeviceView('bl')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); margin-left: auto;">
+                            👁️ Toggle View
+                        </button>
+                    </div>
+                    <div id="bl_devices" class="device-selector-v2"></div>
+                </div>
+
+                <!-- Task Flow Preview -->
+                <div
+                    style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 14px; color: #a5b4fc; margin-bottom: 8px;">📋 Task Flow (per device):</div>
+                    <div style="font-size: 13px; color: #e4e9f7; line-height: 1.8;">
+                        1. ⏱️ Sequential join delay (device# × <span id="bl_preview_join_delay">3</span>s)<br>
+                        2. ⏸️ Random idle delay<br>
+                        3. 🧹 Close & reopen TikTok<br>
+                        4. 📜 Random FYP scroll (0-2x)<br>
+                        5. 🔗 Open live stream<br>
+                        6. 🔄 Watch & perform actions with sequential delays:<br>
+                        <span style="margin-left: 24px;">❤️ Like: <span id="bl_preview_like_status" style="color: #6ee7b7;">ON</span> (delay: <span id="bl_preview_like_delay">2</span>s/device)</span><br>
+                        <span style="margin-left: 24px;">💬 Comment: <span id="bl_preview_comment_status" style="color: #6ee7b7;">ON</span> (delay: <span id="bl_preview_comment_delay">3</span>s/device)</span><br>
+                        <span style="margin-left: 24px;">🔄 Share: <span id="bl_preview_share_status" style="color: #6ee7b7;">ON</span> (delay: <span id="bl_preview_share_delay">2</span>s/device)</span><br>
+                        7. 🧹 Cleanup
+                    </div>
+                </div>
+
+                <button onclick="createBoostLiveJob()">🚀 Create Boost Live Job</button>
+            </div>
+
+
+            <!-- Mass Comment Tab -->
+            <div class="tab-content" id="masscomment">
+                <div class="form-group">
+                    <label>🔗 Video URL</label>
+                    <input type="text" id="mc_url" placeholder="https://www.tiktok.com/@user/video/123456789">
+                </div>
+
+                <!-- Idle Delay -->
+                <div class="form-group">
+                    <label>⏸️ Idle Delay Before Start (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="mc_idle_min" value="2" min="0">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="mc_idle_max" value="5" min="0">
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Random delay before starting task (more natural)
+                    </div>
+                </div>
+
+                <!-- Scroll Config -->
+                <div class="form-group">
+                    <label>📜 Max Scroll Count (simulate FYP browsing)</label>
+                    <input type="number" id="mc_scroll_count" value="5" min="0" max="20">
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Will scroll randomly between 0 to this number before opening video
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>⏱️ Delay Per Scroll (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="mc_scroll_delay_min" value="2" min="1">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="mc_scroll_delay_max" value="5" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comments -->
+                <div class="form-group">
+                    <label>💬 Comments (one per line)</label>
+                    <textarea id="mc_comments" rows="5" placeholder="Amazing video! 🔥
+Love this content! ❤️
+Great work! 👏
+Keep it up! 💪
+So creative! ✨"></textarea>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Comments will be distributed across devices
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>🔢 Comments per Device</label>
+                    <input type="number" id="mc_perdevice" value="1" min="1" max="10">
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 How many comments each device will post
+                    </div>
+                </div>
+
+                <!-- Device Start Delay (Stagger) -->
+                <div class="form-group">
+                    <label>⏱️ Device Start Delay (seconds)</label>
+                    <input type="number" id="mc_device_delay" value="0" min="0" max="300">
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                        💡 Delay between each device starting (e.g., 5 = Device 1 starts at 0s, Device 2 at 5s, Device 3 at 10s...)
+                    </div>
+                </div>
+
+                <!-- Device Selection -->
+                <div class="form-group">
+                    <label>📱 Select Devices (<span id="mc_count">0</span> selected)</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <button onclick="selectAllDevices('mc')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            ✅ Select All
+                        </button>
+                        <button onclick="deselectAllDevices('mc')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);">
+                            ❌ Clear All
+                        </button>
+                        <button onclick="toggleDeviceView('mc')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); margin-left: auto;">
+                            👁️ Toggle View
+                        </button>
+                    </div>
+                    <div id="mc_devices" class="device-selector-v2"></div>
+                </div>
+
+                <!-- Task Flow Preview -->
+                <div
+                    style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 14px; color: #a5b4fc; margin-bottom: 8px;">📋 Task Flow:</div>
+                    <div style="font-size: 13px; color: #e4e9f7; line-height: 1.8;">
+                        1. ⏱️ Device start delay (staggered per device)<br>
+                        2. ⏸️ Random idle delay (2-5s)<br>
+                        3. 📱 Open TikTok<br>
+                        4. 📜 Random scroll FYP (0-5x)<br>
+                        5. 🎯 Open target video<br>
+                        6. 💬 Post comment (word-by-word typing)<br>
+                        7. 🧹 Close TikTok
+                    </div>
+                </div>
+
+                <button onclick="createMassCommentJob()">🚀 Create Mass Comment Job</button>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>

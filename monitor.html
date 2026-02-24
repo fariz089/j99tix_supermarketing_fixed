@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Monitor - J99Tix</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* ============================================
+           MONITOR v3 - Xiaowei-style Layout
+           ============================================ */
+        * { box-sizing: border-box; }
+
+        body {
+            background: #0a0e1a;
+            overflow: hidden;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ===== TOP BAR ===== */
+        .monitor-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px;
+            background: rgba(30, 35, 62, 0.9);
+            border-bottom: 1px solid rgba(167, 139, 250, 0.2);
+            flex-shrink: 0;
+            gap: 10px;
+            flex-wrap: wrap;
+            z-index: 100;
+        }
+
+        .monitor-title {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .monitor-stats {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .stat-badge {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .stat-badge.online { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+        .stat-badge.offline { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+        .stat-badge.busy { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+
+        /* ===== MAIN LAYOUT: Grid Left + Panel Right ===== */
+        .monitor-main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Left: Controls + Grid */
+        .monitor-left {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        /* Controls Bar */
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 14px;
+            background: rgba(30, 35, 62, 0.6);
+            border-bottom: 1px solid rgba(167, 139, 250, 0.1);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .controls-left, .controls-right {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .ctrl-btn {
+            padding: 5px 12px !important;
+            font-size: 11px !important;
+            border-radius: 7px !important;
+            cursor: pointer;
+            border: none;
+            color: white;
+            font-weight: 600;
+        }
+
+        .ctrl-btn.active { box-shadow: 0 0 10px rgba(102,126,234,0.4); }
+
+        .filter-group { display: flex; gap: 3px; }
+        .filter-btn {
+            padding: 4px 8px !important;
+            font-size: 10px !important;
+            border-radius: 5px !important;
+            background: rgba(100,116,139,0.2) !important;
+            color: #94a3b8 !important;
+            border: 1px solid rgba(100,116,139,0.2) !important;
+            cursor: pointer;
+        }
+        .filter-btn.active { background: rgba(102,126,234,0.2) !important; color: #a5b4fc !important; border-color: rgba(102,126,234,0.4) !important; }
+
+        .size-control, .refresh-control { display: flex; align-items: center; gap: 5px; color: #94a3b8; font-size: 11px; }
+        .refresh-control select {
+            background: rgba(17,24,39,0.8); border: 1px solid rgba(167,139,250,0.2);
+            color: #e4e9f7; padding: 3px 6px; border-radius: 5px; font-size: 11px;
+        }
+        .size-control input[type="range"] { width: 100px; accent-color: #667eea; cursor: pointer; }
+
+        /* Selection Bar */
+        .selection-bar {
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 14px;
+            background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(118,75,162,0.15));
+            border-bottom: 1px solid rgba(102,126,234,0.3);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .selection-bar.visible { display: flex; }
+        .selection-info { font-size: 13px; font-weight: 600; color: #a5b4fc; }
+        .selection-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+        .sel-btn { padding: 4px 10px !important; font-size: 10px !important; border-radius: 6px !important; cursor: pointer; border: none; color: white; font-weight: 600; }
+
+        /* Device Grid - Scrollable */
+        .grid-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .device-monitor-grid {
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(auto-fill, minmax(var(--card-width, 140px), 1fr));
+        }
+
+        /* Device Card */
+        .monitor-card {
+            background: rgba(17,24,39,0.7);
+            border: 2px solid rgba(100,116,139,0.2);
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            user-select: none;
+        }
+        .monitor-card:hover { border-color: rgba(167,139,250,0.5); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+        .monitor-card.selected { border-color: #667eea; box-shadow: 0 0 12px rgba(102,126,234,0.3); }
+        .monitor-card.offline { opacity: 0.4; }
+
+        .mc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(100,116,139,0.15);
+        }
+        .mc-number { font-weight: 800; font-size: 13px; color: #e4e9f7; }
+        .mc-model { font-size: 9px; color: #64748b; font-weight: 600; }
+        .mc-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .mc-status-dot.online { background: #22c55e; box-shadow: 0 0 5px rgba(34,197,94,0.5); }
+        .mc-status-dot.offline { background: #ef4444; }
+        .mc-status-dot.busy { background: #3b82f6; box-shadow: 0 0 5px rgba(59,130,246,0.5); animation: pulse-busy 2s infinite; }
+        @keyframes pulse-busy { 0%,100%{opacity:1}50%{opacity:0.5} }
+
+        .mc-screenshot {
+            width: 100%;
+            aspect-ratio: 9 / 19.5;
+            background: #0d1117;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .mc-screenshot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .mc-screenshot .placeholder { color: #334155; font-size: 20px; }
+
+        .mc-worker-overlay {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            padding: 3px 6px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            font-size: 9px; color: #94a3b8; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .mc-worker-overlay.running { color: #3b82f6; }
+        .mc-worker-overlay.paused { color: #fb923c; }
+
+        .mc-checkbox {
+            position: absolute; top: 4px; right: 4px; width: 18px; height: 18px;
+            border-radius: 4px; border: 2px solid rgba(167,139,250,0.4); background: rgba(0,0,0,0.5);
+            display: none; align-items: center; justify-content: center; z-index: 5; font-size: 11px; color: white;
+        }
+        .select-mode .mc-checkbox { display: flex; }
+        .monitor-card.selected .mc-checkbox { background: #667eea; border-color: #667eea; }
+
+        .mc-scrcpy-hint {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 6px 12px; border-radius: 7px;
+            font-size: 11px; font-weight: 600; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 10;
+        }
+        .monitor-card:hover .mc-scrcpy-hint { opacity: 1; }
+
+        /* Tag indicator on card */
+        .mc-tag-dot {
+            position: absolute; bottom: 3px; right: 3px;
+            width: 6px; height: 6px; border-radius: 50%;
+        }
+
+        /* ===== RIGHT PANEL (Xiaowei-style) ===== */
+        .right-panel {
+            width: 320px;
+            min-width: 320px;
+            background: rgba(20, 24, 42, 0.95);
+            border-left: 1px solid rgba(167,139,250,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s, min-width 0.3s;
+        }
+        .right-panel.collapsed { width: 0; min-width: 0; overflow: hidden; }
+
+        .panel-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(167,139,250,0.15);
+            flex-shrink: 0;
+        }
+        .panel-tab {
+            flex: 1; padding: 8px 4px; text-align: center; font-size: 11px; font-weight: 600;
+            color: #64748b; cursor: pointer; border-bottom: 2px solid transparent;
+            transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none;
+        }
+        .panel-tab:hover { color: #a5b4fc; background: rgba(102,126,234,0.05); }
+        .panel-tab.active { color: #a5b4fc; border-bottom-color: #667eea; background: rgba(102,126,234,0.1); }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .panel-section {
+            display: none;
+        }
+        .panel-section.active { display: block; }
+
+        /* Panel common styles */
+        .panel-group {
+            margin-bottom: 16px;
+        }
+        .panel-group-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #a5b4fc;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .panel-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .panel-label {
+            font-size: 11px;
+            color: #94a3b8;
+            min-width: 80px;
+        }
+        .panel-input {
+            flex: 1;
+            padding: 5px 8px;
+            background: rgba(17,24,39,0.8);
+            border: 1px solid rgba(167,139,250,0.2);
+            border-radius: 5px;
+            color: #e4e9f7;
+            font-size: 11px;
+        }
+        .panel-input:focus { outline: none; border-color: #667eea; }
+        .panel-btn {
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            color: white;
+            transition: all 0.2s;
+        }
+        .panel-btn:hover { opacity: 0.85; transform: scale(1.02); }
+        .panel-btn.primary { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .panel-btn.success { background: linear-gradient(135deg, #10b981, #059669); }
+        .panel-btn.danger { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .panel-btn.warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .panel-btn.secondary { background: rgba(100,116,139,0.3); color: #94a3b8; }
+
+        .panel-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+        }
+        .panel-toggle-label {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            cursor: pointer;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(100,116,139,0.3);
+            border-radius: 10px;
+            transition: 0.3s;
+        }
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 16px; height: 16px;
+            left: 2px; bottom: 2px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle-switch input:checked + .toggle-slider { background: #667eea; }
+        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+        /* ADB Console */
+        .adb-console {
+            background: rgba(10,14,26,0.8);
+            border: 1px solid rgba(167,139,250,0.15);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .adb-console-header {
+            display: flex; gap: 4px; padding: 6px 8px;
+            background: rgba(30,35,62,0.5);
+            border-bottom: 1px solid rgba(167,139,250,0.1);
+            flex-wrap: wrap;
+        }
+        .adb-console-tab {
+            padding: 3px 8px; font-size: 10px; border-radius: 4px;
+            cursor: pointer; border: none; color: #94a3b8; background: none;
+            font-weight: 600;
+        }
+        .adb-console-tab.active { background: rgba(102,126,234,0.2); color: #a5b4fc; }
+        .adb-console-input {
+            display: flex; padding: 6px; gap: 4px;
+            border-bottom: 1px solid rgba(167,139,250,0.1);
+        }
+        .adb-console-input input {
+            flex: 1; padding: 5px 8px; background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(167,139,250,0.15); border-radius: 4px;
+            color: #e4e9f7; font-family: 'Courier New', monospace; font-size: 11px;
+        }
+        .adb-console-input input:focus { outline: none; border-color: #667eea; }
+        .adb-cmd-list {
+            max-height: 200px; overflow-y: auto; padding: 4px;
+        }
+        .adb-cmd-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 6px; border-radius: 4px; cursor: pointer;
+            font-size: 10px; color: #94a3b8;
+            transition: background 0.15s;
+        }
+        .adb-cmd-item:hover { background: rgba(102,126,234,0.1); color: #a5b4fc; }
+        .adb-cmd-item .cmd-num { color: #667eea; font-weight: 700; min-width: 16px; }
+        .adb-cmd-item .cmd-label { color: #cbd5e1; font-weight: 600; }
+        .adb-cmd-item .cmd-detail { color: #64748b; font-family: monospace; font-size: 9px; }
+
+        /* Phone Tags */
+        .tag-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .tag-item {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+        .tag-item.active { border-color: white; box-shadow: 0 0 6px rgba(255,255,255,0.2); }
+        
+        .device-number-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 2px;
+        }
+        .device-num-btn {
+            padding: 3px 0;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: #64748b;
+            background: rgba(100,116,139,0.1);
+            border-radius: 3px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+        .device-num-btn:hover { background: rgba(102,126,234,0.2); color: #a5b4fc; }
+        .device-num-btn.selected { background: rgba(102,126,234,0.3); color: #a5b4fc; border-color: rgba(102,126,234,0.5); }
+        .device-num-btn.online { color: #22c55e; }
+        .device-num-btn.offline { color: #ef4444; opacity: 0.5; }
+
+        /* Phone Settings Panel */
+        .settings-form {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .settings-row label {
+            font-size: 11px;
+            color: #94a3b8;
+            min-width: 70px;
+        }
+        .settings-row input {
+            flex: 1;
+            padding: 5px 8px;
+            background: rgba(17,24,39,0.8);
+            border: 1px solid rgba(167,139,250,0.2);
+            border-radius: 5px;
+            color: #e4e9f7;
+            font-size: 11px;
+        }
+        .settings-row input:focus { outline: none; border-color: #667eea; }
+
+        /* Display Settings */
+        .display-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .display-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .display-row label {
+            font-size: 11px;
+            color: #94a3b8;
+            min-width: 100px;
+        }
+        .display-slider {
+            flex: 1;
+            accent-color: #667eea;
+        }
+
+        /* Batch Command Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            display: none; align-items: center; justify-content: center; z-index: 10000;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal-box {
+            background: linear-gradient(135deg, #1e2340, #16192e);
+            border: 1px solid rgba(167,139,250,0.3); border-radius: 14px;
+            padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal-box h3 { font-size: 16px; color: #a5b4fc; margin-bottom: 16px; }
+        .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+        .modal-btn { padding: 10px 14px !important; font-size: 12px !important; text-align: center; justify-content: center; cursor: pointer; border: none; color: white; border-radius: 8px; font-weight: 600; }
+        .modal-custom { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(167,139,250,0.15); }
+        .modal-custom label { display: block; font-size: 12px; color: #a5b4fc; margin-bottom: 6px; font-weight: 600; }
+        .modal-custom input {
+            width: 100%; padding: 8px 12px; background: rgba(17,24,39,0.8);
+            border: 1px solid rgba(167,139,250,0.2); border-radius: 6px; color: #e4e9f7;
+            font-family: 'Courier New', monospace; font-size: 12px; margin-bottom: 8px;
+        }
+        .modal-custom input:focus { outline: none; border-color: #667eea; }
+        .modal-close { margin-top: 12px; width: 100%; background: rgba(100,116,139,0.3) !important; color: #94a3b8 !important; cursor: pointer; border: none; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+
+        /* Status log */
+        .status-log {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            max-height: 100px; background: rgba(10,14,26,0.95);
+            border-top: 1px solid rgba(167,139,250,0.2);
+            padding: 6px 12px; overflow-y: auto;
+            font-size: 10px; font-family: 'Courier New', monospace; color: #64748b;
+            display: none; z-index: 100;
+        }
+        .status-log.visible { display: block; }
+        .status-log .log-entry { padding: 1px 0; }
+        .status-log .log-entry.success { color: #22c55e; }
+        .status-log .log-entry.error { color: #ef4444; }
+        .status-log .log-entry.info { color: #3b82f6; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 16px; right: 16px; padding: 10px 18px;
+            border-radius: 8px; font-size: 12px; font-weight: 600; z-index: 10002;
+            animation: slideIn 0.3s ease; box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+        }
+        .toast.success { background: rgba(16,185,129,0.9); color: white; }
+        .toast.error { background: rgba(239,68,68,0.9); color: white; }
+        .toast.info { background: rgba(59,130,246,0.9); color: white; }
+        @keyframes slideIn { from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1} }
+
+        /* Phone Settings Dialog */
+        .phone-settings-dialog {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            background: linear-gradient(135deg, #1e2340, #16192e);
+            border: 1px solid rgba(167,139,250,0.3); border-radius: 14px;
+            padding: 24px; min-width: 340px; z-index: 10001;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            display: none;
+        }
+        .phone-settings-dialog.visible { display: block; }
+        .phone-settings-dialog h3 { font-size: 15px; color: #a5b4fc; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .phone-settings-dialog .close-btn {
+            position: absolute; top: 12px; right: 12px;
+            background: none; border: none; color: #64748b; cursor: pointer; font-size: 18px;
+        }
+        .phone-settings-dialog .close-btn:hover { color: #ef4444; }
+
+        /* Overlay backdrop */
+        .dialog-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 10000;
+            display: none;
+        }
+        .dialog-backdrop.visible { display: block; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.4); }
+
+        /* Panel toggle button */
+        .panel-toggle-btn {
+            position: absolute; right: 320px; top: 50%;
+            transform: translateY(-50%);
+            background: rgba(30,35,62,0.9);
+            border: 1px solid rgba(167,139,250,0.2);
+            color: #a5b4fc; cursor: pointer;
+            padding: 8px 4px; border-radius: 6px 0 0 6px;
+            font-size: 14px; z-index: 50;
+            transition: right 0.3s;
+        }
+        .right-panel.collapsed ~ .panel-toggle-btn { right: 0; }
+    </style>
+</head>
+
+<body>
+    <!-- Top Bar -->
+    <div class="monitor-topbar">
+        <div class="monitor-title">📱 Device Monitor</div>
+        <div class="monitor-stats">
+            <div class="stat-badge online">🟢 <span id="stat-online">0</span> Online</div>
+            <div class="stat-badge offline">🔴 <span id="stat-offline">0</span> Offline</div>
+            <div class="stat-badge busy">🔵 <span id="stat-busy">0</span> Working</div>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="monitor-main">
+        <!-- Left: Grid Area -->
+        <div class="monitor-left">
+            <!-- Controls Bar -->
+            <div class="controls-bar">
+                <div class="controls-left">
+                    <button class="ctrl-btn" onclick="toggleSelectMode()" id="btn-select-mode"
+                        style="background: linear-gradient(135deg, #6b7280, #4b5563);">☐ Select Mode</button>
+                    <button class="ctrl-btn" onclick="refreshAllScreenshots()"
+                        style="background: linear-gradient(135deg, #3b82f6, #2563eb);">🔄 Refresh All</button>
+                    <button class="ctrl-btn" onclick="reconnectAllDevices()"
+                        style="background: linear-gradient(135deg, #10b981, #059669);">📡 Reconnect</button>
+                    <button class="ctrl-btn" onclick="toggleLog()"
+                        style="background: linear-gradient(135deg, #6b7280, #4b5563);">📋 Log</button>
+                    <div class="filter-group">
+                        <button class="filter-btn active" onclick="filterDevices('all', this)">All</button>
+                        <button class="filter-btn" onclick="filterDevices('online', this)">Online</button>
+                        <button class="filter-btn" onclick="filterDevices('busy', this)">Busy</button>
+                        <button class="filter-btn" onclick="filterDevices('offline', this)">Offline</button>
+                    </div>
+                </div>
+                <div class="controls-right">
+                    <span id="stream-mode-label" style="font-size:11px;font-weight:700;color:#22c55e;">🟢 REALTIME</span>
+                    <span id="fps-display" style="font-size:10px;color:#64748b;min-width:40px;">0 fps</span>
+                    <button class="ctrl-btn" id="btn-stream-mode" onclick="toggleStreamMode()" style="background: linear-gradient(135deg, #10b981, #059669);">📡 Realtime ON</button>
+                    <div class="refresh-control">
+                        ⏱️ Poll:
+                        <select id="refresh-interval" onchange="changeRefreshInterval(this.value)">
+                            <option value="0">Off</option>
+                            <option value="1000">1s</option>
+                            <option value="1500">1.5s</option>
+                            <option value="2000" selected>2s</option>
+                            <option value="3000">3s</option>
+                            <option value="5000">5s</option>
+                        </select>
+                    </div>
+                    <div class="size-control">
+                        📐 <input type="range" id="card-size" min="80" max="250" value="140" oninput="changeCardSize(this.value)">
+                        <span id="size-label">140px</span>
+                    </div>
+                    <button class="ctrl-btn" onclick="toggleRightPanel()" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">⚙️ Panel</button>
+                </div>
+            </div>
+
+            <!-- Selection Bar -->
+            <div class="selection-bar" id="selection-bar">
+                <div class="selection-info">
+                    <span id="selected-count">0</span> devices selected
+                    <button class="sel-btn" onclick="selectAllVisible()" style="background: linear-gradient(135deg, #10b981, #059669); margin-left: 6px;">Select All</button>
+                    <button class="sel-btn" onclick="clearSelection()" style="background: rgba(100,116,139,0.3); color: #94a3b8;">Clear</button>
+                </div>
+                <div class="selection-actions">
+                    <button class="sel-btn" onclick="batchScrcpy()" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">🖥️ Scrcpy</button>
+                    <button class="sel-btn" onclick="showBatchModal()" style="background: linear-gradient(135deg, #f59e0b, #d97706);">⚡ Commands</button>
+                    <button class="sel-btn" onclick="batchOpenTikTok()" style="background: linear-gradient(135deg, #10b981, #059669);">📱 Open TT</button>
+                    <button class="sel-btn" onclick="batchCloseTikTok()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">❌ Close TT</button>
+                    <button class="sel-btn" onclick="openPhoneSettings()" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">📱 Settings</button>
+                </div>
+            </div>
+
+            <!-- Scrollable Grid -->
+            <div class="grid-container">
+                <div class="device-monitor-grid" id="device-grid" style="--card-width: 140px;"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel (Xiaowei-style) -->
+        <div class="right-panel" id="right-panel">
+            <div class="panel-tabs">
+                <button class="panel-tab active" onclick="switchPanelTab('common', this)">Common</button>
+                <button class="panel-tab" onclick="switchPanelTab('settings', this)">Settings</button>
+                <button class="panel-tab" onclick="switchPanelTab('console', this)">Console</button>
+                <button class="panel-tab" onclick="switchPanelTab('tags', this)">Tags</button>
+            </div>
+            <div class="panel-content">
+                <!-- Common Tab -->
+                <div class="panel-section active" id="panel-common">
+                    <div class="panel-group">
+                        <div class="panel-group-title">📡 Connection</div>
+                        <div class="panel-toggle">
+                            <span class="panel-toggle-label">ADB Mode</span>
+                            <label class="toggle-switch"><input type="checkbox" checked disabled><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="panel-toggle">
+                            <span class="panel-toggle-label">WiFi Mode</span>
+                            <label class="toggle-switch"><input type="checkbox" id="toggle-wifi" onchange="toggleWifiMode(this.checked)"><span class="toggle-slider"></span></label>
+                        </div>
+                        <div style="display:flex;gap:6px;margin-top:6px;">
+                            <button class="panel-btn success" onclick="reconnectAllDevices()" style="flex:1;">📡 Reconnect All</button>
+                            <button class="panel-btn primary" onclick="scanAndReconnectDevices()" style="flex:1;">🔍 Scan</button>
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">🖥️ Display</div>
+                        <div class="panel-toggle">
+                            <span class="panel-toggle-label">Show Touches</span>
+                            <label class="toggle-switch"><input type="checkbox" id="toggle-touches" onchange="toggleShowTouches(this.checked)"><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="panel-toggle">
+                            <span class="panel-toggle-label">Dark Screen</span>
+                            <label class="toggle-switch"><input type="checkbox" id="toggle-dark-screen" onchange="toggleDarkScreen(this.checked)"><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="panel-toggle">
+                            <span class="panel-toggle-label">Auto Screen Off</span>
+                            <label class="toggle-switch"><input type="checkbox" id="toggle-screen-off" onchange="toggleAutoScreenOff(this.checked)"><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="panel-toggle">
+                            <span class="panel-toggle-label">Stay On (Charging)</span>
+                            <label class="toggle-switch"><input type="checkbox" id="toggle-stay-on" onchange="toggleStayOn(this.checked)"><span class="toggle-slider"></span></label>
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">🔧 Quick Actions</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                            <button class="panel-btn primary" onclick="quickAction('reboot')">🔄 Reboot</button>
+                            <button class="panel-btn danger" onclick="quickAction('shutdown')">⏻ Shutdown</button>
+                            <button class="panel-btn success" onclick="quickAction('wake')">💡 Wake Up</button>
+                            <button class="panel-btn secondary" onclick="quickAction('sleep')">😴 Sleep</button>
+                            <button class="panel-btn warning" onclick="quickAction('home')">🏠 Home</button>
+                            <button class="panel-btn secondary" onclick="quickAction('back')">◀️ Back</button>
+                            <button class="panel-btn primary" onclick="quickAction('volup')">🔊 Vol Up</button>
+                            <button class="panel-btn primary" onclick="quickAction('voldown')">🔉 Vol Down</button>
+                            <button class="panel-btn success" onclick="quickAction('wifi-on')">📶 WiFi On</button>
+                            <button class="panel-btn danger" onclick="quickAction('wifi-off')">📵 WiFi Off</button>
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">📐 Display Size</div>
+                        <div class="display-group">
+                            <div class="display-row">
+                                <label>Card Size</label>
+                                <input type="range" class="display-slider" min="80" max="300" value="140" id="large-screen-size"
+                                    oninput="changeDisplaySize(this.value)">
+                                <span id="large-screen-val" style="color:#a5b4fc;font-size:11px;min-width:32px;">140px</span>
+                            </div>
+                            <div class="display-row">
+                                <label>Thumbnail Quality</label>
+                                <input type="range" class="display-slider" min="100" max="360" value="180" id="small-screen-size"
+                                    oninput="changeThumbnailWidth(this.value)">
+                                <span id="small-screen-val" style="color:#a5b4fc;font-size:11px;min-width:32px;">180px</span>
+                            </div>
+                            <div class="display-row">
+                                <label>Stream Speed</label>
+                                <input type="range" class="display-slider" min="1" max="10" value="5" id="frame-rate-slider"
+                                    oninput="changeStreamSpeed(parseInt(this.value))">
+                                <span id="frame-rate-val" style="color:#a5b4fc;font-size:11px;min-width:50px;">Normal</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div class="panel-section" id="panel-settings">
+                    <div class="panel-group">
+                        <div class="panel-group-title">📱 Phone Settings (Selected Devices)</div>
+                        <div class="settings-form">
+                            <div class="settings-row">
+                                <label>Resolution</label>
+                                <input type="text" id="set-width" placeholder="Width" style="width:70px;">
+                                <span style="color:#64748b;">×</span>
+                                <input type="text" id="set-height" placeholder="Height" style="width:70px;">
+                            </div>
+                            <div class="settings-row">
+                                <label>DPI</label>
+                                <input type="text" id="set-dpi" placeholder="e.g. 320">
+                                <button class="panel-btn secondary" onclick="adjustDPI(-10)">−</button>
+                                <button class="panel-btn secondary" onclick="adjustDPI(10)">+</button>
+                            </div>
+                            <div class="settings-row">
+                                <label>Brightness</label>
+                                <input type="range" min="0" max="255" value="128" id="set-brightness" style="flex:1;">
+                            </div>
+                            <div style="display:flex;gap:6px;margin-top:6px;">
+                                <button class="panel-btn secondary" onclick="resetPhoneSettings()" style="flex:1;">Reset to Default</button>
+                                <button class="panel-btn primary" onclick="applyPhoneSettings()" style="flex:1;">Confirm</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">🔐 Advanced</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                            <button class="panel-btn warning" onclick="adbAction('shell wm density reset')">Reset DPI</button>
+                            <button class="panel-btn warning" onclick="adbAction('shell wm size reset')">Reset Resolution</button>
+                            <button class="panel-btn danger" onclick="adbAction('shell pm clear com.zhiliaoapp.musically')">Clear TikTok Data</button>
+                            <button class="panel-btn secondary" onclick="adbAction('shell pm list packages -3')">List Apps</button>
+                            <button class="panel-btn primary" onclick="batchInstallAPK()">📦 Install APK</button>
+                            <button class="panel-btn secondary" onclick="adbAction('shell dumpsys battery')">Battery Info</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Console Tab -->
+                <div class="panel-section" id="panel-console">
+                    <div class="panel-group">
+                        <div class="panel-group-title">💻 ADB Command Console</div>
+                        <div class="adb-console">
+                            <div class="adb-console-header">
+                                <button class="adb-console-tab active" onclick="switchConsoleTab('common-cmds', this)">Common Commands</button>
+                                <button class="adb-console-tab" onclick="switchConsoleTab('history', this)">History</button>
+                                <button class="adb-console-tab" onclick="switchConsoleTab('adb-list', this)">ADB List</button>
+                            </div>
+                            <div class="adb-console-input">
+                                <input type="text" id="adb-cmd-input" placeholder="ADB Command - Enter ↵ to execute"
+                                    onkeydown="if(event.key==='Enter')executeAdbFromConsole()">
+                                <button class="panel-btn primary" onclick="executeAdbFromConsole()" style="padding:5px 10px;font-size:10px;">▶️</button>
+                            </div>
+                            <div class="adb-cmd-list" id="adb-cmd-list">
+                                <!-- Common commands -->
+                                <div id="console-common-cmds">
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell svc power stayon true')">
+                                        <span class="cmd-num">1</span>
+                                        <span class="cmd-label">Stay On</span>
+                                        <span class="cmd-detail">adb shell svc power stayon true</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell reboot -p')">
+                                        <span class="cmd-num">2</span>
+                                        <span class="cmd-label">Shutdown</span>
+                                        <span class="cmd-detail">adb shell reboot -p</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell input keyevent KEYCODE_VOLUME_UP')">
+                                        <span class="cmd-num">3</span>
+                                        <span class="cmd-label">Volume Up</span>
+                                        <span class="cmd-detail">adb shell input keyevent KEYCODE_VOLUME_UP</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell input keyevent KEYCODE_VOLUME_DOWN')">
+                                        <span class="cmd-num">4</span>
+                                        <span class="cmd-label">Volume Down</span>
+                                        <span class="cmd-detail">adb shell input keyevent KEYCODE_VOLUME_DOWN</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell svc wifi enable')">
+                                        <span class="cmd-num">5</span>
+                                        <span class="cmd-label">Turn on WiFi</span>
+                                        <span class="cmd-detail">adb shell svc wifi enable</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell svc wifi disable')">
+                                        <span class="cmd-num">6</span>
+                                        <span class="cmd-label">Turn off WiFi</span>
+                                        <span class="cmd-detail">adb shell svc wifi disable</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell wm density 320')">
+                                        <span class="cmd-num">7</span>
+                                        <span class="cmd-label">Change DPI</span>
+                                        <span class="cmd-detail">adb shell wm density 320</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell wm density reset')">
+                                        <span class="cmd-num">8</span>
+                                        <span class="cmd-label">Reset DPI</span>
+                                        <span class="cmd-detail">adb shell wm density reset</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell wm size 1080x2340')">
+                                        <span class="cmd-num">9</span>
+                                        <span class="cmd-label">Change Resolution</span>
+                                        <span class="cmd-detail">adb shell wm size 1080x2340</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell wm size reset')">
+                                        <span class="cmd-num">10</span>
+                                        <span class="cmd-label">Reset Resolution</span>
+                                        <span class="cmd-detail">adb shell wm size reset</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell am force-stop com.zhiliaoapp.musically')">
+                                        <span class="cmd-num">11</span>
+                                        <span class="cmd-label">Close TikTok</span>
+                                        <span class="cmd-detail">adb shell am force-stop com.zhiliaoapp.musically</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell monkey -p com.zhiliaoapp.musically 1')">
+                                        <span class="cmd-num">12</span>
+                                        <span class="cmd-label">Open TikTok</span>
+                                        <span class="cmd-detail">adb shell monkey -p com.zhiliaoapp.musically 1</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runCompoundCmd(['shell settings put system screen_brightness_mode 0','shell settings put system screen_brightness 10'])">
+                                        <span class="cmd-num">13</span>
+                                        <span class="cmd-label">Min Brightness</span>
+                                        <span class="cmd-detail">brightness 10</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell input keyevent KEYCODE_WAKEUP')">
+                                        <span class="cmd-num">14</span>
+                                        <span class="cmd-label">Wake Up</span>
+                                        <span class="cmd-detail">adb shell input keyevent KEYCODE_WAKEUP</span>
+                                    </div>
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell input keyevent KEYCODE_SLEEP')">
+                                        <span class="cmd-num">15</span>
+                                        <span class="cmd-label">Sleep</span>
+                                        <span class="cmd-detail">adb shell input keyevent KEYCODE_SLEEP</span>
+                                    </div>
+                                </div>
+                                <div id="console-history" style="display:none;">
+                                    <div style="color:#64748b;font-size:10px;padding:8px;text-align:center;">No command history yet</div>
+                                </div>
+                                <div id="console-adb-list" style="display:none;">
+                                    <div style="color:#64748b;font-size:10px;padding:8px;text-align:center;">Loading connected devices...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">📝 Text Distribution</div>
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            <input type="text" class="panel-input" id="text-distribute" placeholder="Text to type on all devices">
+                            <button class="panel-btn primary" onclick="distributeText()" style="width:100%;">📝 Send Text</button>
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">📂 File Distribution</div>
+                        <div style="display:flex;gap:6px;">
+                            <button class="panel-btn primary" onclick="batchInstallAPK()" style="flex:1;">📦 Install APK</button>
+                            <button class="panel-btn secondary" onclick="pushFile()" style="flex:1;">📁 Push File</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tags Tab -->
+                <div class="panel-section" id="panel-tags">
+                    <div class="panel-group">
+                        <div class="panel-group-title">🏷️ Phone Tags</div>
+                        <!-- Inline tag creation (no prompt!) -->
+                        <div style="display:flex;gap:4px;margin-bottom:8px;">
+                            <input type="text" class="panel-input" id="new-tag-name" placeholder="Tag name..." style="flex:1;" 
+                                onkeydown="if(event.key==='Enter')addTagInline()">
+                            <button class="panel-btn primary" onclick="addTagInline()" style="padding:4px 10px;font-size:10px;white-space:nowrap;">+ Add</button>
+                        </div>
+                        <button class="panel-btn success" onclick="autoTagByModel()" style="width:100%;padding:4px;font-size:10px;margin-bottom:8px;">🤖 Auto Tag by Model</button>
+                        <div class="panel-toggle" style="margin-bottom:8px;">
+                            <span class="panel-toggle-label">All Tag (<span id="tag-total">0</span>/<span id="tag-max">0</span>)</span>
+                            <label style="font-size:10px;color:#64748b;cursor:pointer;" onclick="selectAllByTag()">select all</label>
+                        </div>
+                        <div id="tag-list" class="tag-grid">
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">📱 Device Numbers</div>
+                        <div class="device-number-grid" id="device-number-grid">
+                        </div>
+                    </div>
+
+                    <div class="panel-group">
+                        <div class="panel-group-title">🪞 Mirror Control (Sync)</div>
+                        <p style="font-size:10px;color:#64748b;margin-bottom:6px;">
+                            Select device → Start Mirror → Tap/swipe di layar bawah ini → Semua device mengikuti.
+                        </p>
+                        <div id="mirror-status" style="font-size:10px;color:#64748b;margin-bottom:6px;">Status: Inactive</div>
+                        <div style="display:flex;gap:4px;margin-bottom:8px;">
+                            <button class="panel-btn primary" id="btn-mirror-start" onclick="startMirrorMode()" style="flex:1;padding:5px;font-size:10px;">🪞 Start Mirror</button>
+                            <button class="panel-btn danger" id="btn-mirror-stop" onclick="stopMirrorMode()" style="flex:1;padding:5px;font-size:10px;display:none;">⏹ Stop Mirror</button>
+                        </div>
+                        <!-- Mirror Touchpad: LIVE screenshot with transparent overlay -->
+                        <div id="mirror-touchpad" style="display:none;">
+                            <div id="mirror-screen-container" style="
+                                width:100%;aspect-ratio:9/19.5;
+                                background:#000;border:2px solid rgba(102,126,234,0.5);border-radius:8px;
+                                position:relative;overflow:hidden;cursor:crosshair;margin-bottom:6px;
+                                user-select:none;-webkit-user-select:none;
+                            ">
+                                <!-- Live screenshot of master device -->
+                                <img id="mirror-screen-img" src="" alt="" style="width:100%;height:100%;object-fit:contain;pointer-events:none;">
+                                <!-- Touch indicator -->
+                                <div id="mirror-touch-dot" style="
+                                    position:absolute;width:20px;height:20px;border-radius:50%;
+                                    background:rgba(239,68,68,0.5);border:2px solid #ef4444;
+                                    display:none;pointer-events:none;transform:translate(-50%,-50%);
+                                    box-shadow:0 0 12px rgba(239,68,68,0.4);transition:opacity 0.15s;
+                                "></div>
+                                <!-- Swipe line -->
+                                <svg id="mirror-swipe-line" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;">
+                                    <line id="swipe-line-el" x1="0" y1="0" x2="0" y2="0" stroke="#ef4444" stroke-width="2" stroke-dasharray="4" style="display:none;"/>
+                                </svg>
+                            </div>
+                            <!-- Gesture log -->
+                            <div style="background:rgba(10,14,26,0.8);border:1px solid rgba(102,126,234,0.2);border-radius:6px;padding:4px 6px;margin-bottom:6px;max-height:60px;overflow-y:auto;" id="mirror-gesture-log">
+                                <div style="font-size:9px;color:#64748b;">Tap/swipe di layar atas untuk control semua device...</div>
+                            </div>
+                            <!-- Nav buttons -->
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:4px;">
+                                <button class="panel-btn secondary" onclick="mirrorKey('KEYCODE_BACK')" style="padding:5px;font-size:10px;">◀ Back</button>
+                                <button class="panel-btn secondary" onclick="mirrorKey('KEYCODE_HOME')" style="padding:5px;font-size:10px;">🏠 Home</button>
+                                <button class="panel-btn secondary" onclick="mirrorKey('KEYCODE_APP_SWITCH')" style="padding:5px;font-size:10px;">☐ Recent</button>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:4px;">
+                                <button class="panel-btn secondary" onclick="mirrorKey('KEYCODE_VOLUME_UP')" style="padding:4px;font-size:9px;">🔊 Vol+</button>
+                                <button class="panel-btn secondary" onclick="mirrorKey('KEYCODE_VOLUME_DOWN')" style="padding:4px;font-size:9px;">🔉 Vol-</button>
+                                <button class="panel-btn secondary" onclick="mirrorKey('KEYCODE_POWER')" style="padding:4px;font-size:9px;">⚡ Power</button>
+                            </div>
+                            <div style="display:flex;gap:4px;">
+                                <input type="text" class="panel-input" id="mirror-text-input" placeholder="Type text..." style="flex:1;" 
+                                    onkeydown="if(event.key==='Enter')sendMirrorText()">
+                                <button class="panel-btn primary" onclick="sendMirrorText()" style="padding:4px 10px;font-size:10px;">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Command Modal -->
+    <div class="modal-overlay" id="batch-modal">
+        <div class="modal-box">
+            <h3>⚡ Batch Command — <span id="modal-device-count">0</span> devices</h3>
+            <div class="modal-actions">
+                <button class="modal-btn" onclick="batchCommand('shell am force-stop com.zhiliaoapp.musically')" style="background:linear-gradient(135deg,#ef4444,#dc2626);">❌ Close TikTok</button>
+                <button class="modal-btn" onclick="batchCommand('shell monkey -p com.zhiliaoapp.musically 1')" style="background:linear-gradient(135deg,#10b981,#059669);">📱 Open TikTok</button>
+                <button class="modal-btn" onclick="batchCommand('shell reboot')" style="background:linear-gradient(135deg,#f59e0b,#d97706);">🔄 Reboot</button>
+                <button class="modal-btn" onclick="batchCommand('shell input keyevent KEYCODE_HOME')" style="background:linear-gradient(135deg,#6366f1,#4f46e5);">🏠 Home</button>
+                <button class="modal-btn" onclick="batchCommand('shell input keyevent KEYCODE_BACK')" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">◀️ Back</button>
+                <button class="modal-btn" onclick="batchCommand('shell input keyevent KEYCODE_WAKEUP')" style="background:linear-gradient(135deg,#ec4899,#db2777);">💡 Wake</button>
+                <button class="modal-btn" onclick="batchCommand('shell input keyevent KEYCODE_SLEEP')" style="background:linear-gradient(135deg,#6b7280,#4b5563);">😴 Sleep</button>
+                <button class="modal-btn" onclick="batchCommand('shell settings put system screen_brightness 50')" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1a1a2e;">🔅 Bright 50%</button>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn" onclick="batchInstallAPK()" style="background:linear-gradient(135deg,#14b8a6,#0d9488);">📦 Install APK</button>
+                <button class="modal-btn" onclick="batchScreenshot()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);">📸 Screenshot</button>
+            </div>
+            <div class="modal-custom">
+                <label>🔧 Custom ADB Command</label>
+                <input type="text" id="custom-adb-cmd" placeholder="shell pm list packages -3" onkeydown="if(event.key==='Enter')runCustomCommand()">
+                <button class="modal-btn" onclick="runCustomCommand()" style="width:100%;background:linear-gradient(135deg,#667eea,#764ba2);">▶️ Execute</button>
+            </div>
+            <button class="modal-close" onclick="closeBatchModal()">✖ Close</button>
+        </div>
+    </div>
+
+    <!-- Phone Settings Dialog -->
+    <div class="dialog-backdrop" id="settings-backdrop" onclick="closePhoneSettings()"></div>
+    <div class="phone-settings-dialog" id="phone-settings-dialog">
+        <button class="close-btn" onclick="closePhoneSettings()">✕</button>
+        <h3>📱 Phone Settings (Selected: <span id="settings-device-count">0</span>)</h3>
+        <div class="settings-form">
+            <div class="settings-row">
+                <label>Resolution</label>
+                <input type="text" id="ps-width" placeholder="Width" style="width:80px;">
+                <span style="color:#64748b;">×</span>
+                <input type="text" id="ps-height" placeholder="Height" style="width:80px;">
+            </div>
+            <div class="settings-row">
+                <label>DPI</label>
+                <input type="text" id="ps-dpi" placeholder="e.g. 320">
+                <button class="panel-btn secondary" onclick="adjustDPIDialog(-10)" style="padding:3px 8px;">−</button>
+                <button class="panel-btn secondary" onclick="adjustDPIDialog(10)" style="padding:3px 8px;">+</button>
+            </div>
+            <div class="settings-row">
+                <label>Brightness</label>
+                <input type="range" min="0" max="255" value="128" id="ps-brightness" style="flex:1;">
+                <span id="ps-brightness-val" style="color:#a5b4fc;font-size:11px;min-width:28px;">128</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:12px;">
+                <button class="panel-btn secondary" onclick="resetPhoneSettingsDialog()" style="flex:1;">Reset to Default</button>
+                <button class="panel-btn primary" onclick="applyPhoneSettingsDialog()" style="flex:1;">✅ Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Log -->
+    <div class="status-log" id="status-log"></div>
+
+    <script src="monitor-renderer.js"></script>
+</body>
+</html>
