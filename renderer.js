@@ -226,30 +226,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupBoostLiveToggle('bl_like_enabled', 'bl_like_settings', 'bl_preview_like_status');
     setupBoostLiveToggle('bl_comment_enabled', 'bl_comment_settings', 'bl_preview_comment_status');
-    setupBoostLiveToggle('bl_share_enabled', 'bl_share_settings', 'bl_preview_share_status');
+
+    // Share toggle (no settings div, only updates preview status)
+    const shareToggle = document.getElementById('bl_share_enabled');
+    if (shareToggle) {
+        shareToggle.addEventListener('change', () => {
+            const previewStatus = document.getElementById('bl_preview_share_status');
+            if (previewStatus) {
+                previewStatus.textContent = shareToggle.checked ? 'ON' : 'OFF';
+                previewStatus.style.color = shareToggle.checked ? '#6ee7b7' : '#f87171';
+            }
+        });
+    }
 
     // Boost Live preview updater
     const updateBoostLivePreview = () => {
         const joinDelay = document.getElementById('bl_join_delay');
-        const likeDelay = document.getElementById('bl_like_delay');
+        const likeInterval = document.getElementById('bl_like_interval');
         const commentDelay = document.getElementById('bl_comment_delay');
-        const shareDelay = document.getElementById('bl_share_delay');
 
         if (joinDelay && document.getElementById('bl_preview_join_delay')) {
             document.getElementById('bl_preview_join_delay').textContent = joinDelay.value;
         }
-        if (likeDelay && document.getElementById('bl_preview_like_delay')) {
-            document.getElementById('bl_preview_like_delay').textContent = likeDelay.value;
+        if (likeInterval && document.getElementById('bl_preview_like_interval')) {
+            document.getElementById('bl_preview_like_interval').textContent = likeInterval.value;
         }
         if (commentDelay && document.getElementById('bl_preview_comment_delay')) {
             document.getElementById('bl_preview_comment_delay').textContent = commentDelay.value;
         }
-        if (shareDelay && document.getElementById('bl_preview_share_delay')) {
-            document.getElementById('bl_preview_share_delay').textContent = shareDelay.value;
-        }
     };
 
-    ['bl_join_delay', 'bl_like_delay', 'bl_comment_delay', 'bl_share_delay'].forEach(id => {
+    ['bl_join_delay', 'bl_like_interval', 'bl_comment_delay'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('input', updateBoostLivePreview);
@@ -447,7 +454,6 @@ async function createBoostLiveJob() {
         liveUrl: url,
         username: username,
         duration: parseInt(document.getElementById('bl_duration').value),
-        interval: parseInt(document.getElementById('bl_interval').value),
         idleDelayMin: parseInt(document.getElementById('bl_idle_min').value),
         idleDelayMax: parseInt(document.getElementById('bl_idle_max').value),
         comments: comments,
@@ -457,17 +463,10 @@ async function createBoostLiveJob() {
         likeEnabled: likeEnabled,
         commentEnabled: commentEnabled,
         shareEnabled: shareEnabled,
-        // Sequential action delays
-        likeDelay: likeEnabled ? (parseInt(document.getElementById('bl_like_delay').value) || 0) : 0,
-        commentDelay: commentEnabled ? (parseInt(document.getElementById('bl_comment_delay').value) || 0) : 0,
-        shareDelay: shareEnabled ? (parseInt(document.getElementById('bl_share_delay').value) || 0) : 0,
-        // Percentages
-        percentages: {
-            tap: parseInt(document.getElementById('bl_tap').value),
-            like: parseInt(document.getElementById('bl_like').value),
-            comment: parseInt(document.getElementById('bl_comment').value),
-            share: parseInt(document.getElementById('bl_share').value)
-        }
+        // Like interval (how often to double tap)
+        likeInterval: likeEnabled ? (parseInt(document.getElementById('bl_like_interval').value) || 5) : 5,
+        // Comment delay (how often to comment)
+        commentDelay: commentEnabled ? (parseInt(document.getElementById('bl_comment_delay').value) || 30) : 30,
     };
 
     showLoading('Creating Boost Live job...');
@@ -482,13 +481,12 @@ async function createBoostLiveJob() {
         hideLoading();
 
         if (result.success) {
-            const estimatedActions = Math.floor(config.duration / config.interval);
             const joinSpread = (deviceIds.length - 1) * config.joinDelay;
 
             const actionStatus = [];
-            if (likeEnabled) actionStatus.push(`❤️ Like (delay: ${config.likeDelay}s)`);
-            if (commentEnabled) actionStatus.push(`💬 Comment (delay: ${config.commentDelay}s)`);
-            if (shareEnabled) actionStatus.push(`🔄 Share (delay: ${config.shareDelay}s)`);
+            if (likeEnabled) actionStatus.push(`❤️ Like (tiap ${config.likeInterval}s)`);
+            if (commentEnabled) actionStatus.push(`💬 Comment (tiap ${config.commentDelay}s)`);
+            if (shareEnabled) actionStatus.push(`🔄 Share (1x)`);
 
             showNotification(
                 `<strong>Boost Live Job Created!</strong><br><br>` +
@@ -496,7 +494,6 @@ async function createBoostLiveJob() {
                 `Duration: ${config.duration}s<br>` +
                 `Join delay: ${config.joinDelay}s/device (spread: ${joinSpread}s)<br>` +
                 `Idle delay: ${config.idleDelayMin}-${config.idleDelayMax}s<br>` +
-                `Estimated checks: ~${estimatedActions}<br>` +
                 `Custom comments: ${comments.length}<br>` +
                 `Devices: ${deviceIds.length}<br><br>` +
                 `Actions: ${actionStatus.join(', ') || 'None enabled'}`,

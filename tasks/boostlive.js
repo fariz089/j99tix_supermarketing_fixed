@@ -6,13 +6,13 @@ class BoostLiveTask {
         const {
             liveUrl, username,
             duration = 1800,
-            interval = 10,
-            percentages = { tap: 15, like: 30, comment: 10, share: 5 },
             idleDelayMin = 0, idleDelayMax = 0,
             jobId,
             deviceIndex = 0,
-            joinDelay = 0, likeDelay = 0, commentDelay = 0, shareDelay = 0,
-            likeEnabled = true, commentEnabled = true, shareEnabled = true
+            joinDelay = 0,
+            likeEnabled = true, commentEnabled = true, shareEnabled = true,
+            likeInterval = 5,      // double tap setiap X detik
+            commentDelay = 30,     // comment setiap X detik
         } = config;
 
         const startTime = Date.now();
@@ -21,9 +21,10 @@ class BoostLiveTask {
         const W = worker.screenWidth;
         const H = worker.screenHeight;
 
-        let stats = { likes: 0, comments: 0, commentsFailed: 0, shares: 0, checks: 0 };
+        let stats = { likes: 0, comments: 0, commentsFailed: 0, shares: 0 };
         let shareDone = false;
         let lastCommentTime = 0;
+        let lastLikeTime = 0;
 
         const checkCancelled = async () => {
             if (jobId && db) {
@@ -40,7 +41,7 @@ class BoostLiveTask {
         try {
             const tier = UIHelper.getDeviceTier(worker);
             console.log(`[${worker.deviceId}] 🎥 Boost Live | ${duration}s, Device #${deviceIndex + 1}, screen ${W}x${H}, tier: ${tier}`);
-            console.log(`[${worker.deviceId}]    Like: ${likeEnabled ? 'ON' : 'OFF'}, Comment: ${commentEnabled ? 'ON' : 'OFF'} (delay ${commentDelay}s), Share: ${shareEnabled ? '1x' : 'OFF'}`);
+            console.log(`[${worker.deviceId}]    Like: ${likeEnabled ? 'ON' : 'OFF'} (tiap ${likeInterval}s), Comment: ${commentEnabled ? 'ON' : 'OFF'} (tiap ${commentDelay}s), Share: ${shareEnabled ? '1x' : 'OFF'}`);
 
             // Pre-detect touch device for X8 sendevent
             if (tier === 'low' && !worker._touchDevice) {
@@ -130,26 +131,29 @@ class BoostLiveTask {
 
             // ============================================================
             // MAIN LOOP
-            // Every interval: double tap (like), check comment, share 1x
+            // Like: double tap setiap likeInterval detik
+            // Comment: setiap commentDelay detik (sequential cycle dari DB)
+            // Share: 1x saja
+            // Loop sleep = 1 detik (granular timing)
             // ============================================================
+            let loopCount = 0;
             while (Date.now() < endTime) {
                 if (await checkCancelled()) throw new Error('Job cancelled by user');
                 if (worker.status === 'paused') { await worker.waitForResume(); continue; }
 
-                stats.checks++;
                 const now = Date.now();
-                const elapsed = (now - startTime) / 1000;
 
                 // ---- DOUBLE TAP LIKE (proven method from supermarketing) ----
                 if (likeEnabled) {
-                    const myLikeTime = deviceIndex * likeDelay;
-                    if (elapsed >= myLikeTime) {
+                    const timeSinceLastLike = (now - lastLikeTime) / 1000;
+                    if (lastLikeTime === 0 || timeSinceLastLike >= likeInterval) {
                         await UIHelper.doubleTapLikeCenter(worker);
                         stats.likes++;
+                        lastLikeTime = Date.now();
                     }
                 }
 
-                // ---- COMMENT (sequential via database cycle) ----
+                // ---- COMMENT (sequential via database cycle, delay-based) ----
                 if (commentEnabled) {
                     const timeSinceLastComment = (now - lastCommentTime) / 1000;
 
@@ -176,33 +180,31 @@ class BoostLiveTask {
                             // Check captcha after comment
                             await this._handleCaptcha(worker);
                         }
-                        // waiting_delay, already_commented, no_comments → skip
+                        // waiting_delay, already_commented, no_comments → skip silently
                     }
                 }
 
-                // ---- SHARE (1x only) ----
+                // ---- SHARE (1x only, no delay) ----
                 if (shareEnabled && !shareDone) {
-                    const myShareTime = deviceIndex * shareDelay;
-                    if (elapsed >= myShareTime) {
-                        console.log(`[${worker.deviceId}] 🔄 Sharing...`);
-                        const shared = await UIHelper.clickShareAndRepost(worker);
-                        if (shared) {
-                            stats.shares++;
-                            console.log(`[${worker.deviceId}] ✅ Shared`);
-                        }
-                        shareDone = true;
+                    console.log(`[${worker.deviceId}] 🔄 Sharing...`);
+                    const shared = await UIHelper.clickShareAndRepost(worker);
+                    if (shared) {
+                        stats.shares++;
+                        console.log(`[${worker.deviceId}] ✅ Shared`);
                     }
+                    shareDone = true;
                 }
 
-                // ---- LOG every 5 checks ----
-                if (stats.checks % 5 === 0) {
-                    const el = Math.floor(elapsed);
-                    const rem = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
-                    console.log(`[${worker.deviceId}] 📊 ${el}s/${duration}s (${rem}s left) | L:${stats.likes} C:${stats.comments} S:${stats.shares}`);
+                // ---- LOG every 30 loops (~30s) ----
+                loopCount++;
+                if (loopCount % 30 === 0) {
+                    const elapsed = Math.floor((now - startTime) / 1000);
+                    const rem = Math.max(0, Math.floor((endTime - now) / 1000));
+                    console.log(`[${worker.deviceId}] 📊 ${elapsed}s/${duration}s (${rem}s left) | L:${stats.likes} C:${stats.comments} S:${stats.shares}`);
                 }
 
-                // Sleep interval
-                await worker.sleep(interval * 1000);
+                // Sleep 1 second (granular loop for accurate timing)
+                await worker.sleep(1000);
             }
 
             // Cleanup

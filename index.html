@@ -248,45 +248,20 @@ https://www.tiktok.com/@user/video/111222333" style="resize: vertical;"></textar
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>🎯 Action Percentages (% chance per interval)</label>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                        <div>
-                            <label style="font-size: 12px; color: #64748b;">👆 Tap Screen %</label>
-                            <input type="number" id="bl_tap" value="15" min="0" max="100">
-                        </div>
-                        <div>
-                            <label style="font-size: 12px; color: #64748b;">❤️ Like %</label>
-                            <input type="number" id="bl_like" value="30" min="0" max="100">
-                        </div>
-                        <div>
-                            <label style="font-size: 12px; color: #64748b;">💬 Comment %</label>
-                            <input type="number" id="bl_comment" value="10" min="0" max="100">
-                        </div>
-                        <div>
-                            <label style="font-size: 12px; color: #64748b;">🔄 Share %</label>
-                            <input type="number" id="bl_share" value="5" min="0" max="100">
-                        </div>
-                    </div>
-                    <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                        💡 Actions will be randomly triggered throughout watch duration
-                    </div>
-                </div>
-
-                <!-- Like Settings -->
+                <!-- Like Settings (Double Tap Layar) -->
                 <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
                         <label class="toggle-switch">
                             <input type="checkbox" id="bl_like_enabled" checked>
                             <span class="toggle-slider"></span>
                         </label>
-                        <span style="color: #fca5a5; font-weight: 600; font-size: 14px;">❤️ Like</span>
+                        <span style="color: #fca5a5; font-weight: 600; font-size: 14px;">❤️ Like (Double Tap Layar)</span>
                     </div>
                     <div id="bl_like_settings">
-                        <label style="font-size: 12px; color: #64748b;">Delay Between Each Device Liking (seconds)</label>
-                        <input type="number" id="bl_like_delay" value="2" min="0" max="300">
+                        <label style="font-size: 12px; color: #64748b;">Interval Double Tap (seconds)</label>
+                        <input type="number" id="bl_like_interval" value="5" min="1" max="60">
                         <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-                            💡 Device 1 likes at 0s, Device 2 at 2s, Device 3 at 4s, etc.
+                            💡 Setiap berapa detik double tap layar (like). Contoh: 5 = double tap setiap 5 detik.
                         </div>
                     </div>
                 </div>
@@ -301,37 +276,25 @@ https://www.tiktok.com/@user/video/111222333" style="resize: vertical;"></textar
                         <span style="color: #c4b5fd; font-weight: 600; font-size: 14px;">💬 Comment</span>
                     </div>
                     <div id="bl_comment_settings">
-                        <label style="font-size: 12px; color: #64748b;">Delay Between Each Device Commenting (seconds)</label>
-                        <input type="number" id="bl_comment_delay" value="3" min="0" max="300">
+                        <label style="font-size: 12px; color: #64748b;">Delay Antar Comment (seconds)</label>
+                        <input type="number" id="bl_comment_delay" value="30" min="5" max="300">
                         <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-                            💡 Device 1 comments at 0s, Device 2 at 3s, Device 3 at 6s, etc.
+                            💡 Tiap berapa detik comment dikirim. Selama masih ada komentar, terus comment dengan delay ini.
                         </div>
                     </div>
                 </div>
 
-                <!-- Share Settings -->
+                <!-- Share Settings (1x only, no delay) -->
                 <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
                         <label class="toggle-switch">
                             <input type="checkbox" id="bl_share_enabled" checked>
                             <span class="toggle-slider"></span>
                         </label>
-                        <span style="color: #6ee7b7; font-weight: 600; font-size: 14px;">🔄 Share</span>
+                        <span style="color: #6ee7b7; font-weight: 600; font-size: 14px;">🔄 Share (1x saja)</span>
                     </div>
-                    <div id="bl_share_settings">
-                        <label style="font-size: 12px; color: #64748b;">Delay Between Each Device Sharing (seconds)</label>
-                        <input type="number" id="bl_share_delay" value="2" min="0" max="300">
-                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-                            💡 Device 1 shares at 0s, Device 2 at 2s, Device 3 at 4s, etc.
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>⏱️ Action Check Interval (seconds)</label>
-                    <input type="number" id="bl_interval" value="10" min="3" max="30">
-                    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-                        💡 How often to check if action should be performed
+                    <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                        💡 Share dilakukan sekali saja setelah masuk live, tidak perlu delay.
                     </div>
                 </div>
 
@@ -382,10 +345,10 @@ https://www.tiktok.com/@user/video/111222333" style="resize: vertical;"></textar
                         3. 🧹 Close & reopen TikTok<br>
                         4. 📜 Random FYP scroll (0-2x)<br>
                         5. 🔗 Open live stream<br>
-                        6. 🔄 Watch & perform actions with sequential delays:<br>
-                        <span style="margin-left: 24px;">❤️ Like: <span id="bl_preview_like_status" style="color: #6ee7b7;">ON</span> (delay: <span id="bl_preview_like_delay">2</span>s/device)</span><br>
-                        <span style="margin-left: 24px;">💬 Comment: <span id="bl_preview_comment_status" style="color: #6ee7b7;">ON</span> (delay: <span id="bl_preview_comment_delay">3</span>s/device)</span><br>
-                        <span style="margin-left: 24px;">🔄 Share: <span id="bl_preview_share_status" style="color: #6ee7b7;">ON</span> (delay: <span id="bl_preview_share_delay">2</span>s/device)</span><br>
+                        6. 🔄 Watch & perform actions:<br>
+                        <span style="margin-left: 24px;">❤️ Like: <span id="bl_preview_like_status" style="color: #6ee7b7;">ON</span> — double tap setiap <span id="bl_preview_like_interval">5</span>s</span><br>
+                        <span style="margin-left: 24px;">💬 Comment: <span id="bl_preview_comment_status" style="color: #6ee7b7;">ON</span> — setiap <span id="bl_preview_comment_delay">30</span>s (sequential cycle)</span><br>
+                        <span style="margin-left: 24px;">🔄 Share: <span id="bl_preview_share_status" style="color: #6ee7b7;">ON</span> — 1x saja</span><br>
                         7. 🧹 Cleanup
                     </div>
                 </div>
