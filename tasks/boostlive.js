@@ -123,9 +123,9 @@ class BoostLiveTask {
             }
             if (!opened) throw new Error('Failed to open live stream');
 
-            // Check captcha after opening
+            // Check captcha after opening (common trigger point)
             await worker.sleep(2000);
-            await this._handleCaptcha(worker);
+            await this._detectAndHandleCaptchaLive(worker);
 
             console.log(`[${worker.deviceId}] ✅ Live opened - watching for ${duration}s`);
 
@@ -134,14 +134,34 @@ class BoostLiveTask {
             // Like: double tap setiap likeInterval detik
             // Comment: setiap commentDelay detik (sequential cycle dari DB)
             // Share: 1x saja
+            // Captcha: periodic check setiap ~30 detik + setelah comment
             // Loop sleep = 1 detik (granular timing)
             // ============================================================
             let loopCount = 0;
+            let lastCaptchaCheckTime = 0;
+            const CAPTCHA_CHECK_INTERVAL = 30; // check captcha setiap 30 detik
+
             while (Date.now() < endTime) {
                 if (await checkCancelled()) throw new Error('Job cancelled by user');
                 if (worker.status === 'paused') { await worker.waitForResume(); continue; }
 
                 const now = Date.now();
+
+                // ---- PERIODIC CAPTCHA CHECK ----
+                // Di live, captcha bisa muncul kapan saja (tidak seperti masscomment yang predictable).
+                // Check setiap CAPTCHA_CHECK_INTERVAL detik supaya tidak terlalu sering (dumpUI lambat).
+                const timeSinceLastCaptchaCheck = (now - lastCaptchaCheckTime) / 1000;
+                if (lastCaptchaCheckTime === 0 || timeSinceLastCaptchaCheck >= CAPTCHA_CHECK_INTERVAL) {
+                    const captchaBlocking = await this._detectAndHandleCaptchaLive(worker);
+                    lastCaptchaCheckTime = Date.now();
+                    if (captchaBlocking) {
+                        // Captcha terdetect tapi tidak bisa di-dismiss, skip actions dulu
+                        // Tunggu 30 detik lagi sebelum retry
+                        console.log(`[${worker.deviceId}] ⏳ Captcha blocking, waiting before retry...`);
+                        await worker.sleep(10000);
+                        continue;
+                    }
+                }
 
                 // ---- DOUBLE TAP LIKE (proven method from supermarketing) ----
                 if (likeEnabled) {
@@ -177,8 +197,14 @@ class BoostLiveTask {
                             }
                             lastCommentTime = Date.now();
 
-                            // Check captcha after comment
-                            await this._handleCaptcha(worker);
+                            // Check captcha after comment (comment sering trigger captcha)
+                            const captchaAfterComment = await this._detectAndHandleCaptchaLive(worker);
+                            lastCaptchaCheckTime = Date.now();
+                            if (captchaAfterComment) {
+                                console.log(`[${worker.deviceId}] ⏳ Captcha after comment, pausing actions...`);
+                                await worker.sleep(10000);
+                                continue;
+                            }
                         }
                         // waiting_delay, already_commented, no_comments → skip silently
                     }
@@ -246,42 +272,140 @@ class BoostLiveTask {
     }
 
     /**
-     * Detect and try to dismiss captcha.
+     * Detect captcha in LIVE stream context.
+     * 
+     * Problem: dumpUI() sering gagal di live karena video terus jalan (SurfaceView blocks UIAutomator).
+     * Solution: Pakai 2 metode detection:
+     *   1. Quick check via `dumpsys window` — cek apakah ada captcha dialog/overlay window
+     *   2. Fallback ke dumpUI() — tapi di live, ini sering timeout
+     * 
+     * Returns true jika captcha blocking dan TIDAK bisa di-dismiss.
      */
-    static async _handleCaptcha(worker) {
+    static async _detectAndHandleCaptchaLive(worker) {
         try {
-            const { detected } = await UIHelper.detectCaptcha(worker);
-            if (!detected) return false;
+            // Method 1: Quick window check (fast, works even during live playback)
+            // Captcha di TikTok biasanya muncul sebagai dialog/overlay window
+            let captchaDetected = false;
+            try {
+                const windowInfo = await worker.execAdb('shell "dumpsys window windows 2>/dev/null | grep -i -E \'captcha|verify|puzzle|webview.*tiktok\' || true"');
+                if (windowInfo && windowInfo.trim().length > 0) {
+                    console.log(`[${worker.deviceId}] 🛡️ Captcha detected via window check`);
+                    captchaDetected = true;
+                }
+            } catch (e) { }
 
-            console.log(`[${worker.deviceId}] 🛡️ Captcha detected! Dismissing...`);
+            // Method 2: Activity check — captcha sering buka activity baru atau WebView
+            if (!captchaDetected) {
+                try {
+                    const focusedWindow = await worker.execAdb('shell "dumpsys window 2>/dev/null | grep mCurrentFocus || true"');
+                    // Kalau focus bukan di TikTok main activity, mungkin captcha overlay
+                    if (focusedWindow && (
+                        focusedWindow.toLowerCase().includes('captcha') ||
+                        focusedWindow.toLowerCase().includes('verify') ||
+                        focusedWindow.toLowerCase().includes('webview')
+                    )) {
+                        console.log(`[${worker.deviceId}] 🛡️ Captcha detected via focus check`);
+                        captchaDetected = true;
+                    }
+                } catch (e) { }
+            }
 
-            for (let i = 0; i < 3; i++) {
-                const xml = await UIHelper.dumpUI(worker);
-                if (xml) {
-                    for (const desc of ['Close', '×', 'close', 'Tutup']) {
-                        const r = UIHelper.findByContentDesc(xml, desc);
-                        if (r.success) {
-                            await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
-                            await worker.sleep(2000);
-                            break;
-                        }
+            // Method 3: UI dump fallback (slower, may timeout on live but worth trying)
+            if (!captchaDetected) {
+                try {
+                    const { detected } = await UIHelper.detectCaptcha(worker);
+                    if (detected) {
+                        captchaDetected = true;
+                    }
+                } catch (e) { }
+            }
+
+            if (!captchaDetected) return false;
+
+            // Captcha detected — try to dismiss
+            console.log(`[${worker.deviceId}] 🛡️ Captcha detected in live! Attempting dismiss...`);
+            return await this._handleCaptchaLive(worker);
+
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Handle/dismiss captcha during LIVE stream.
+     * Returns true if captcha is STILL blocking (failed to dismiss).
+     * Returns false if captcha is gone (dismissed or was false positive).
+     */
+    static async _handleCaptchaLive(worker) {
+        const W = worker.screenWidth;
+        const H = worker.screenHeight;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            console.log(`[${worker.deviceId}] 🛡️ Dismiss attempt ${attempt}/3...`);
+
+            // Try UI dump to find close button
+            const xml = await UIHelper.dumpUI(worker);
+            if (xml) {
+                // Cek dulu apakah masih ada captcha text
+                const captchaPatterns = [/Verify to continue/i, /Drag the puzzle/i, /Slide to verify/i,
+                    /Verifikasi untuk melanjutkan/i, /Geser potongan puzzle/i, /captcha/i, /验证/];
+                let stillHasCaptcha = false;
+                for (const p of captchaPatterns) {
+                    if (p.test(xml)) { stillHasCaptcha = true; break; }
+                }
+                if (!stillHasCaptcha) {
+                    console.log(`[${worker.deviceId}] ✅ Captcha gone (false positive or already dismissed)`);
+                    return false;
+                }
+
+                // Try close/X button
+                for (const desc of ['Close', '×', 'close', 'Tutup', 'Refresh']) {
+                    const r = UIHelper.findByContentDesc(xml, desc);
+                    if (r.success && r.y < H * 0.7) {
+                        console.log(`[${worker.deviceId}] 👆 Tapping "${desc}" at ${r.x},${r.y}`);
+                        await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
+                        await worker.sleep(2000);
+                        break;
                     }
                 }
 
-                await UIHelper.goBack(worker);
-                await worker.sleep(2000);
-
-                const check = await UIHelper.detectCaptcha(worker);
-                if (!check.detected) {
-                    console.log(`[${worker.deviceId}] ✅ Captcha dismissed`);
-                    return true;
+                // Also try text-based close button
+                for (const text of ['Close', 'Tutup', 'Refresh', 'Report a problem']) {
+                    const r = UIHelper.findByText(xml, text);
+                    if (r.success) {
+                        console.log(`[${worker.deviceId}] 👆 Tapping text "${text}" at ${r.x},${r.y}`);
+                        await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
+                        await worker.sleep(2000);
+                        break;
+                    }
                 }
             }
 
-            console.log(`[${worker.deviceId}] ⚠️ Captcha persists, waiting 30s...`);
-            await worker.sleep(30000);
-            return false;
-        } catch (e) { return false; }
+            // Back button as fallback
+            await UIHelper.goBack(worker);
+            await worker.sleep(2000);
+
+            // Verify if captcha is gone
+            const { detected } = await UIHelper.detectCaptcha(worker);
+            if (!detected) {
+                // Double-check with window method
+                try {
+                    const windowInfo = await worker.execAdb('shell "dumpsys window windows 2>/dev/null | grep -i -E \'captcha|verify|puzzle\' || true"');
+                    if (!windowInfo || windowInfo.trim().length === 0) {
+                        console.log(`[${worker.deviceId}] ✅ Captcha dismissed!`);
+                        return false;
+                    }
+                } catch (e) {
+                    console.log(`[${worker.deviceId}] ✅ Captcha likely dismissed`);
+                    return false;
+                }
+            }
+
+            await worker.sleep(3000);
+        }
+
+        console.log(`[${worker.deviceId}] ⚠️ Captcha persists after 3 attempts, will retry later`);
+        return true; // Still blocking
     }
 }
 
