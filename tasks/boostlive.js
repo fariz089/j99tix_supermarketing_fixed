@@ -163,8 +163,72 @@ class BoostLiveTask {
                     }
                 }
 
-                // ---- DOUBLE TAP LIKE (proven method from supermarketing) ----
-                if (likeEnabled) {
+                // ============================================================
+                // PRIORITY SYSTEM:
+                // Comment punya priority TERTINGGI. Kalau comment waktunya sudah
+                // tiba, SEMUA action lain (like, share) di-SKIP di iteration ini.
+                // 
+                // Kenapa? Karena proses comment itu multi-step:
+                //   klik input → type text → klik send
+                // Kalau double tap like jalan SEBELUM comment, tap di center
+                // layar bisa membuat input field/keyboard hilang (lihat screenshot).
+                // Ini menyebabkan text tidak terkirim.
+                //
+                // Flow:
+                //   1. Cek apakah comment waktunya sudah tiba → set flag
+                //   2. Kalau flag ON → jalankan HANYA comment, skip like & share
+                //   3. Kalau flag OFF → jalankan like & share seperti biasa
+                // ============================================================
+
+                let commentIsDue = false;
+                if (commentEnabled) {
+                    const timeSinceLastComment = (now - lastCommentTime) / 1000;
+                    if (lastCommentTime === 0 || timeSinceLastComment >= commentDelay) {
+                        commentIsDue = true;
+                    }
+                }
+
+                if (commentIsDue) {
+                    // ---- COMMENT HAS PRIORITY — skip all other actions ----
+                    const commentResult = db.tryGetComment ?
+                        db.tryGetComment(jobId, worker.deviceId, deviceIndex, commentDelay) :
+                        { status: 'ok', comment: db.getAndUseComment ? db.getAndUseComment(jobId, worker.deviceId) : null };
+
+                    if (commentResult.status === 'ok' && commentResult.comment) {
+                        console.log(`[${worker.deviceId}] 💬 [PRIORITY] Commenting: "${commentResult.comment}" (like & share paused)`);
+
+                        const success = await this._postCommentLive(worker, commentResult.comment);
+
+                        if (success) {
+                            stats.comments++;
+                            if (db.markDeviceCommented) db.markDeviceCommented(jobId, worker.deviceId);
+                            console.log(`[${worker.deviceId}] ✅ Comment posted`);
+                        } else {
+                            stats.commentsFailed++;
+                            console.log(`[${worker.deviceId}] ❌ Comment failed`);
+                        }
+                        lastCommentTime = Date.now();
+                        // Reset like timer supaya like tidak langsung jalan di next iteration
+                        // (beri jeda 2 detik setelah comment selesai)
+                        lastLikeTime = Date.now() - ((likeInterval - 2) * 1000);
+
+                        // Check captcha after comment (comment sering trigger captcha)
+                        const captchaAfterComment = await this._detectAndHandleCaptchaLive(worker);
+                        lastCaptchaCheckTime = Date.now();
+                        if (captchaAfterComment) {
+                            console.log(`[${worker.deviceId}] ⏳ Captcha after comment, pausing actions...`);
+                            await worker.sleep(10000);
+                            continue;
+                        }
+                    } else {
+                        // waiting_delay, already_commented, no_comments → 
+                        // Comment tidak jadi, lanjut like & share di bawah
+                        commentIsDue = false;
+                    }
+                }
+
+                // ---- DOUBLE TAP LIKE — HANYA kalau comment TIDAK sedang proses ----
+                if (!commentIsDue && likeEnabled) {
                     const timeSinceLastLike = (now - lastLikeTime) / 1000;
                     if (lastLikeTime === 0 || timeSinceLastLike >= likeInterval) {
                         await UIHelper.doubleTapLikeCenter(worker);
@@ -173,45 +237,8 @@ class BoostLiveTask {
                     }
                 }
 
-                // ---- COMMENT (sequential via database cycle, delay-based) ----
-                if (commentEnabled) {
-                    const timeSinceLastComment = (now - lastCommentTime) / 1000;
-
-                    if (lastCommentTime === 0 || timeSinceLastComment >= commentDelay) {
-                        const commentResult = db.tryGetComment ?
-                            db.tryGetComment(jobId, worker.deviceId, deviceIndex, commentDelay) :
-                            { status: 'ok', comment: db.getAndUseComment ? db.getAndUseComment(jobId, worker.deviceId) : null };
-
-                        if (commentResult.status === 'ok' && commentResult.comment) {
-                            console.log(`[${worker.deviceId}] 💬 Commenting: "${commentResult.comment}"`);
-
-                            const success = await this._postCommentLive(worker, commentResult.comment);
-
-                            if (success) {
-                                stats.comments++;
-                                if (db.markDeviceCommented) db.markDeviceCommented(jobId, worker.deviceId);
-                                console.log(`[${worker.deviceId}] ✅ Comment posted`);
-                            } else {
-                                stats.commentsFailed++;
-                                console.log(`[${worker.deviceId}] ❌ Comment failed`);
-                            }
-                            lastCommentTime = Date.now();
-
-                            // Check captcha after comment (comment sering trigger captcha)
-                            const captchaAfterComment = await this._detectAndHandleCaptchaLive(worker);
-                            lastCaptchaCheckTime = Date.now();
-                            if (captchaAfterComment) {
-                                console.log(`[${worker.deviceId}] ⏳ Captcha after comment, pausing actions...`);
-                                await worker.sleep(10000);
-                                continue;
-                            }
-                        }
-                        // waiting_delay, already_commented, no_comments → skip silently
-                    }
-                }
-
-                // ---- SHARE (1x only, no delay) ----
-                if (shareEnabled && !shareDone) {
+                // ---- SHARE (1x only) — HANYA kalau comment TIDAK sedang proses ----
+                if (!commentIsDue && shareEnabled && !shareDone) {
                     console.log(`[${worker.deviceId}] 🔄 Sharing...`);
                     const shared = await UIHelper.clickShareAndRepost(worker);
                     if (shared) {
