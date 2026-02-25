@@ -474,6 +474,75 @@ class UIHelper {
     // GESTURES
     // ================================================
 
+    /**
+     * Detect device tier for optimized double tap
+     */
+    static getDeviceTier(worker) {
+        const info = worker.deviceInfo || {};
+        const model = (info.model || '').toUpperCase();
+        const manufacturer = (info.manufacturer || '').toUpperCase();
+        if (manufacturer.includes('EVERCOSS') || model === 'X8') return 'low';
+        if (manufacturer.includes('SAMSUNG') || manufacturer.includes('OPPO') ||
+            model.startsWith('SM-') || model.startsWith('PDEM')) return 'high';
+        return 'high';
+    }
+
+    /**
+     * Double tap center — proven method from SuperMarketing.
+     * Tier-based: EVERCOSS X8 uses sendevent, Samsung/OPPO uses worker.doubleTap()
+     */
+    static async doubleTapLikeCenter(worker) {
+        const tier = this.getDeviceTier(worker);
+        const W = worker.screenWidth;
+        const H = worker.screenHeight;
+        const x = worker.randomInt(Math.round(W * 0.30), Math.round(W * 0.70));
+        const y = worker.randomInt(Math.round(H * 0.35), Math.round(H * 0.60));
+
+        if (tier === 'low') {
+            // EVERCOSS X8: sendevent (fastest, zero Java overhead)
+            if (worker._touchDevice && worker._touchMaxRawX && worker._touchMaxRawY) {
+                const rawX = Math.round(x * worker._touchMaxRawX / W);
+                const rawY = Math.round(y * worker._touchMaxRawY / H);
+                const dev = worker._touchDevice;
+                const cmd = [
+                    `sendevent ${dev} 3 57 0`, `sendevent ${dev} 3 53 ${rawX}`, `sendevent ${dev} 3 54 ${rawY}`,
+                    `sendevent ${dev} 1 330 1`, `sendevent ${dev} 0 0 0`,
+                    `sendevent ${dev} 3 57 -1`, `sendevent ${dev} 1 330 0`, `sendevent ${dev} 0 0 0`,
+                    `sendevent ${dev} 3 57 1`, `sendevent ${dev} 3 53 ${rawX}`, `sendevent ${dev} 3 54 ${rawY}`,
+                    `sendevent ${dev} 1 330 1`, `sendevent ${dev} 0 0 0`,
+                    `sendevent ${dev} 3 57 -1`, `sendevent ${dev} 1 330 0`, `sendevent ${dev} 0 0 0`
+                ].join(' && ');
+                try {
+                    await worker.execAdb(`shell "${cmd}"`);
+                    return true;
+                } catch (e) { }
+            }
+            // Fallback: two swipes in background
+            try {
+                await worker.execAdb(`shell "input swipe ${x} ${y} ${x} ${y} 30 & input swipe ${x} ${y} ${x} ${y} 30"`);
+                return true;
+            } catch (e) { }
+            // Last resort
+            try {
+                await worker.execAdb(`shell "input tap ${x} ${y} && input tap ${x} ${y}"`);
+                return true;
+            } catch (e) { }
+        } else {
+            // Samsung/OPPO: worker.doubleTap()
+            try {
+                await worker.doubleTap(x, y);
+                return true;
+            } catch (e) { }
+        }
+        // Absolute fallback
+        try {
+            await worker.execAdb(`shell input tap ${x} ${y}`);
+            await worker.sleep(50);
+            await worker.execAdb(`shell input tap ${x} ${y}`);
+        } catch (e) { }
+        return true;
+    }
+
     static async swipeFYP(worker, speed) {
         const x = Math.round(worker.screenWidth * 0.5);
         const sy = Math.round(worker.screenHeight * 0.75);

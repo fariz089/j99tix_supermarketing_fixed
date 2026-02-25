@@ -7,7 +7,7 @@ class BoostLiveTask {
             liveUrl, username,
             duration = 1800,
             interval = 10,
-            percentages = { tap: 15, like: 30, comment: 100, share: 5 },
+            percentages = { tap: 15, like: 30, comment: 10, share: 5 },
             idleDelayMin = 0, idleDelayMax = 0,
             jobId,
             deviceIndex = 0,
@@ -18,8 +18,12 @@ class BoostLiveTask {
         const startTime = Date.now();
         const endTime = startTime + (duration * 1000);
         const db = worker.db;
+        const W = worker.screenWidth;
+        const H = worker.screenHeight;
 
-        let stats = { taps: 0, likes: 0, comments: 0, commentsFailed: 0, shares: 0, checks: 0 };
+        let stats = { likes: 0, comments: 0, commentsFailed: 0, shares: 0, checks: 0 };
+        let shareDone = false;
+        let lastCommentTime = 0;
 
         const checkCancelled = async () => {
             if (jobId && db) {
@@ -34,8 +38,28 @@ class BoostLiveTask {
         };
 
         try {
-            console.log(`[${worker.deviceId}] 🎥 Boost Live | ${duration}s, Device #${deviceIndex + 1}, screen ${worker.screenWidth}x${worker.screenHeight}`);
-            console.log(`[${worker.deviceId}]    Join: ${deviceIndex * joinDelay}s, Like: ${likeEnabled ? 'ON' : 'OFF'}, Comment: ${commentEnabled ? 'ON' : 'OFF'}, Share: ${shareEnabled ? 'ON' : 'OFF'}`);
+            const tier = UIHelper.getDeviceTier(worker);
+            console.log(`[${worker.deviceId}] 🎥 Boost Live | ${duration}s, Device #${deviceIndex + 1}, screen ${W}x${H}, tier: ${tier}`);
+            console.log(`[${worker.deviceId}]    Like: ${likeEnabled ? 'ON' : 'OFF'}, Comment: ${commentEnabled ? 'ON' : 'OFF'} (delay ${commentDelay}s), Share: ${shareEnabled ? '1x' : 'OFF'}`);
+
+            // Pre-detect touch device for X8 sendevent
+            if (tier === 'low' && !worker._touchDevice) {
+                try {
+                    const devices = await worker.execAdb('shell "cat /proc/bus/input/devices"');
+                    const touchMatch = devices.match(/Touch[\s\S]*?event(\d+)/i) ||
+                                       devices.match(/input_mt[\s\S]*?event(\d+)/i);
+                    if (touchMatch) worker._touchDevice = `/dev/input/event${touchMatch[1]}`;
+                    const absInfo = await worker.execAdb('shell "getevent -lp 2>/dev/null | grep ABS_MT_POSITION" || true');
+                    if (absInfo.includes('ABS_MT_POSITION_X')) {
+                        const xMax = absInfo.match(/ABS_MT_POSITION_X.*?max\s+(\d+)/);
+                        const yMax = absInfo.match(/ABS_MT_POSITION_Y.*?max\s+(\d+)/);
+                        if (xMax && yMax) {
+                            worker._touchMaxRawX = parseInt(xMax[1]);
+                            worker._touchMaxRawY = parseInt(yMax[1]);
+                        }
+                    }
+                } catch (e) { }
+            }
 
             // Sequential join delay
             const joinWait = deviceIndex * joinDelay;
@@ -50,7 +74,7 @@ class BoostLiveTask {
                 }
             }
 
-            // Additional random idle delay
+            // Random idle delay
             if (idleDelayMax > 0) {
                 const randomDelay = worker.randomInt(idleDelayMin, idleDelayMax);
                 console.log(`[${worker.deviceId}] ⏱️ Idle delay: ${randomDelay}s`);
@@ -59,7 +83,7 @@ class BoostLiveTask {
 
             if (await checkCancelled()) throw new Error('Job cancelled by user');
 
-            // Open TikTok and go to live
+            // Open TikTok
             await UIHelper.closeTikTok(worker);
             await worker.sleep(1000);
             await UIHelper.openTikTok(worker);
@@ -98,90 +122,87 @@ class BoostLiveTask {
             }
             if (!opened) throw new Error('Failed to open live stream');
 
+            // Check captcha after opening
+            await worker.sleep(2000);
+            await this._handleCaptcha(worker);
+
             console.log(`[${worker.deviceId}] ✅ Live opened - watching for ${duration}s`);
 
-            // Track if comment has been done this cycle (comment is sequential/berurutan)
-            let commentDoneThisCycle = false;
-
-            // Main loop
+            // ============================================================
+            // MAIN LOOP
+            // Every interval: double tap (like), check comment, share 1x
+            // ============================================================
             while (Date.now() < endTime) {
                 if (await checkCancelled()) throw new Error('Job cancelled by user');
                 if (worker.status === 'paused') { await worker.waitForResume(); continue; }
 
                 stats.checks++;
-                await worker.sleep(interval * 1000);
-                if (Date.now() >= endTime) break;
-                if (await checkCancelled()) throw new Error('Job cancelled by user');
-                if (worker.status === 'paused') continue;
+                const now = Date.now();
+                const elapsed = (now - startTime) / 1000;
 
-                const elapsed = (Date.now() - startTime) / 1000;
-
-                // ============ LIKE (random, berdasarkan persentase) ============
-                if (likeEnabled && Math.random() * 100 < percentages.like) {
+                // ---- DOUBLE TAP LIKE (proven method from supermarketing) ----
+                if (likeEnabled) {
                     const myLikeTime = deviceIndex * likeDelay;
                     if (elapsed >= myLikeTime) {
-                        await UIHelper.doubleTapLike(worker);
+                        await UIHelper.doubleTapLikeCenter(worker);
                         stats.likes++;
-                        await worker.sleep(worker.randomInt(500, 1500));
                     }
                 }
 
-                // ============ TAP SCREEN (random natural behavior) ============
-                if (Math.random() * 100 < percentages.tap) {
-                    await UIHelper.tapScreen(worker);
-                    stats.taps++;
-                    await worker.sleep(worker.randomInt(300, 800));
-                }
+                // ---- COMMENT (sequential via database cycle) ----
+                if (commentEnabled) {
+                    const timeSinceLastComment = (now - lastCommentTime) / 1000;
 
-                // ============ COMMENT (sequential/berurutan via database) ============
-                if (commentEnabled && !commentDoneThisCycle) {
-                    const commentResult = db.tryGetComment ?
-                        db.tryGetComment(jobId, worker.deviceId, deviceIndex, commentDelay) :
-                        { status: 'ok', comment: db.getAndUseComment ? db.getAndUseComment(jobId, worker.deviceId) : null };
+                    if (lastCommentTime === 0 || timeSinceLastComment >= commentDelay) {
+                        const commentResult = db.tryGetComment ?
+                            db.tryGetComment(jobId, worker.deviceId, deviceIndex, commentDelay) :
+                            { status: 'ok', comment: db.getAndUseComment ? db.getAndUseComment(jobId, worker.deviceId) : null };
 
-                    if (commentResult.status === 'already_commented') {
-                        commentDoneThisCycle = true;
-                    } else if (commentResult.status === 'waiting_delay') {
-                        // Will retry next interval
-                    } else if (commentResult.status === 'ok' && commentResult.comment) {
-                        console.log(`[${worker.deviceId}] 💬 Commenting: "${commentResult.comment}"`);
+                        if (commentResult.status === 'ok' && commentResult.comment) {
+                            console.log(`[${worker.deviceId}] 💬 Commenting: "${commentResult.comment}"`);
 
-                        const commentSuccess = await this._postCommentLive(worker, commentResult.comment);
+                            const success = await this._postCommentLive(worker, commentResult.comment);
 
-                        if (commentSuccess) {
-                            stats.comments++;
-                            if (db.markDeviceCommented) db.markDeviceCommented(jobId, worker.deviceId);
-                            commentDoneThisCycle = true;
-                            console.log(`[${worker.deviceId}] ✅ Comment posted`);
-                        } else {
-                            stats.commentsFailed++;
-                            console.log(`[${worker.deviceId}] ❌ Comment failed`);
+                            if (success) {
+                                stats.comments++;
+                                if (db.markDeviceCommented) db.markDeviceCommented(jobId, worker.deviceId);
+                                console.log(`[${worker.deviceId}] ✅ Comment posted`);
+                            } else {
+                                stats.commentsFailed++;
+                                console.log(`[${worker.deviceId}] ❌ Comment failed`);
+                            }
+                            lastCommentTime = Date.now();
+
+                            // Check captcha after comment
+                            await this._handleCaptcha(worker);
                         }
-                        await worker.sleep(worker.randomInt(1000, 2000));
+                        // waiting_delay, already_commented, no_comments → skip
                     }
                 }
 
-                // Reset commentDoneThisCycle when new cycle starts
-                if (commentDoneThisCycle && db.canDeviceComment && db.canDeviceComment(jobId, worker.deviceId)) {
-                    commentDoneThisCycle = false;
-                }
-
-                // ============ SHARE (random) ============
-                if (shareEnabled && Math.random() * 100 < percentages.share) {
+                // ---- SHARE (1x only) ----
+                if (shareEnabled && !shareDone) {
                     const myShareTime = deviceIndex * shareDelay;
                     if (elapsed >= myShareTime) {
+                        console.log(`[${worker.deviceId}] 🔄 Sharing...`);
                         const shared = await UIHelper.clickShareAndRepost(worker);
-                        if (shared) stats.shares++;
-                        await worker.sleep(worker.randomInt(500, 1500));
+                        if (shared) {
+                            stats.shares++;
+                            console.log(`[${worker.deviceId}] ✅ Shared`);
+                        }
+                        shareDone = true;
                     }
                 }
 
-                // Log every 5 checks
+                // ---- LOG every 5 checks ----
                 if (stats.checks % 5 === 0) {
-                    const el = Math.floor((Date.now() - startTime) / 1000);
-                    const rem = Math.floor((endTime - Date.now()) / 1000);
-                    console.log(`[${worker.deviceId}] 📊 ${el}s/${duration}s (${rem}s left) | L:${stats.likes} C:${stats.comments} S:${stats.shares} T:${stats.taps}`);
+                    const el = Math.floor(elapsed);
+                    const rem = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+                    console.log(`[${worker.deviceId}] 📊 ${el}s/${duration}s (${rem}s left) | L:${stats.likes} C:${stats.comments} S:${stats.shares}`);
                 }
+
+                // Sleep interval
+                await worker.sleep(interval * 1000);
             }
 
             // Cleanup
@@ -201,27 +222,18 @@ class BoostLiveTask {
 
     /**
      * Post comment in LIVE stream.
-     * Live has input field always visible at bottom, send button to the right.
-     * UIAutomator dump works in live (not SurfaceView-blocked like video playback).
      */
     static async _postCommentLive(worker, comment) {
         try {
-            // Step 1: Click the comment input at bottom of live
             await UIHelper.clickCommentInputLive(worker);
             await worker.sleep(1500);
 
-            // Step 2: Type comment
             const typed = await UIHelper.typeWithADBKeyboard(worker, comment);
-            if (!typed) {
-                console.log(`[${worker.deviceId}] ⚠️ Type failed`);
-                return false;
-            }
+            if (!typed) return false;
             await worker.sleep(800);
 
-            // Step 3: Send — use live-specific send button
             await UIHelper.clickSendButtonLive(worker);
             await worker.sleep(1500);
-
             return true;
         } catch (e) {
             console.log(`[${worker.deviceId}] ⚠️ Comment error: ${e.message}`);
@@ -229,6 +241,45 @@ class BoostLiveTask {
             await worker.sleep(500);
             return false;
         }
+    }
+
+    /**
+     * Detect and try to dismiss captcha.
+     */
+    static async _handleCaptcha(worker) {
+        try {
+            const { detected } = await UIHelper.detectCaptcha(worker);
+            if (!detected) return false;
+
+            console.log(`[${worker.deviceId}] 🛡️ Captcha detected! Dismissing...`);
+
+            for (let i = 0; i < 3; i++) {
+                const xml = await UIHelper.dumpUI(worker);
+                if (xml) {
+                    for (const desc of ['Close', '×', 'close', 'Tutup']) {
+                        const r = UIHelper.findByContentDesc(xml, desc);
+                        if (r.success) {
+                            await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
+                            await worker.sleep(2000);
+                            break;
+                        }
+                    }
+                }
+
+                await UIHelper.goBack(worker);
+                await worker.sleep(2000);
+
+                const check = await UIHelper.detectCaptcha(worker);
+                if (!check.detected) {
+                    console.log(`[${worker.deviceId}] ✅ Captcha dismissed`);
+                    return true;
+                }
+            }
+
+            console.log(`[${worker.deviceId}] ⚠️ Captcha persists, waiting 30s...`);
+            await worker.sleep(30000);
+            return false;
+        } catch (e) { return false; }
     }
 }
 
