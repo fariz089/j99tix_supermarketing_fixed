@@ -380,10 +380,14 @@ class UIHelper {
             }
         }
 
-        // Fallback: In TikTok live, send button is at far right of input row (~93% X, ~93% Y)
-        // But we need to be on the SAME row as input, not below
-        const x = Math.round(W * 0.90);
-        const y = Math.round(H * 0.925);
+        // Fallback: Send button coordinates based on successful logs:
+        // SM-G973F 1080x2280: (1009, 1993) → (0.934, 0.874)
+        // X8 800x1280: (764, 1150) → (0.955, 0.898)  
+        // SM-G975F 1080x2280: (972, 2109) → (0.900, 0.925)
+        // PDEM10 1440x3168: (1332, 2736) → (0.925, 0.864)
+        // Average: X ≈ 0.93, Y ≈ 0.89
+        const x = Math.round(W * 0.93);
+        const y = Math.round(H * 0.89);
         await worker.execAdb(`shell input tap ${x} ${y}`);
         console.log(`[${worker.deviceId}] ⚠️ Send Live (fallback) at (${x}, ${y})`);
         return false;
@@ -675,25 +679,68 @@ class UIHelper {
         await worker.execAdb(`shell input tap ${Math.round(W * 0.5)} ${Math.round(H * 0.45)}`);
         await worker.sleep(800);
 
+        let shareX, shareY;
         const xml = await this.dumpUI(worker);
         if (xml) {
-            const r = this.findByContentDesc(xml, 'share|Share');
+            const r = this.findByContentDesc(xml, 'share|Share|Bagikan');
             if (r.success) {
-                await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
-                await worker.sleep(2000);
-                const xml2 = await this.dumpUI(worker);
-                if (xml2) {
-                    const rp = this.findByText(xml2, 'Repost') || this.findByContentDesc(xml2, 'Repost');
-                    if (rp && rp.success) {
-                        await worker.execAdb(`shell input tap ${rp.x} ${rp.y}`);
-                        console.log(`[${worker.deviceId}] 🔄 Reposted!`);
-                        await worker.sleep(1500);
-                        return true;
-                    }
-                }
-                await this.goBack(worker);
+                shareX = r.x;
+                shareY = r.y;
             }
         }
+
+        // Fallback share coordinates from successful logs:
+        // X8 800x1280: (759, 1176) → (0.949, 0.919)
+        // PDEM10 1440x3168: (1320, 2834) → (0.917, 0.895)
+        // SM-G973F 1080x2280: (1001, 2035) → (0.927, 0.893)
+        // SM-G975F = same as SM-G973F
+        // Average: X ≈ 0.93, Y ≈ 0.90
+        if (!shareX) {
+            shareX = Math.round(W * 0.93);
+            shareY = Math.round(H * 0.90);
+            console.log(`[${worker.deviceId}] 🔄 Share button (fallback) at (${shareX}, ${shareY})`);
+        } else {
+            console.log(`[${worker.deviceId}] 🔄 Share button at (${shareX}, ${shareY})`);
+        }
+
+        await worker.execAdb(`shell input tap ${shareX} ${shareY}`);
+        await worker.sleep(2000);
+
+        // Try to find Repost button
+        const xml2 = await this.dumpUI(worker);
+        if (xml2) {
+            // Try multiple text variants (EN + ID)
+            const rp = this.findByText(xml2, 'Repost|repost|Posting ulang|posting ulang') 
+                     || this.findByContentDesc(xml2, 'Repost|repost|Posting ulang|posting ulang');
+            if (rp && rp.success) {
+                console.log(`[${worker.deviceId}] 🔄 Repost button at (${rp.x}, ${rp.y})`);
+                await worker.execAdb(`shell input tap ${rp.x} ${rp.y}`);
+                console.log(`[${worker.deviceId}] 🔄 Reposted!`);
+                await worker.sleep(1500);
+                return true;
+            }
+            
+            // Debug: log semua text yang ada di share panel supaya kita tahu nama button-nya
+            const textNodes = [];
+            const nodeRegex = /text="([^"]+)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g;
+            let m;
+            while ((m = nodeRegex.exec(xml2)) !== null) {
+                const txt = m[1];
+                const cy = Math.round((parseInt(m[3]) + parseInt(m[5])) / 2);
+                // Only log nodes in bottom half (share panel area)
+                if (cy > H * 0.5 && txt.length > 0 && txt.length < 30) {
+                    textNodes.push(`"${txt}" y=${cy}`);
+                }
+            }
+            if (textNodes.length > 0) {
+                console.log(`[${worker.deviceId}] 📋 Share panel texts: ${textNodes.join(', ')}`);
+            } else {
+                console.log(`[${worker.deviceId}] ⚠️ Repost not found, no text nodes in share panel`);
+            }
+        } else {
+            console.log(`[${worker.deviceId}] ⚠️ UI dump failed after share tap`);
+        }
+        await this.goBack(worker);
         return false;
     }
 
