@@ -299,6 +299,147 @@ class UIHelper {
     }
 
     // ================================================
+    // CLICK SEND BUTTON — LIVE STREAM VERSION
+    // In live, send button is to the RIGHT of the EditText on the SAME row
+    // (not below like in comment panel)
+    // ================================================
+
+    static async clickSendButtonLive(worker) {
+        const W = worker.screenWidth;
+        const H = worker.screenHeight;
+
+        const xml = await this.dumpUI(worker);
+        if (xml) {
+            // Strategy 1: Find "Send"/"Kirim" button by text
+            for (const txt of ['Send', 'Kirim', 'Post', 'send', 'kirim']) {
+                const r = this.findByText(xml, txt);
+                if (r.success && r.y > H * 0.75) {
+                    await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
+                    console.log(`[${worker.deviceId}] ✅ Send Live (text "${txt}") at (${r.x}, ${r.y})`);
+                    return true;
+                }
+            }
+
+            // Strategy 2: Find send by content-desc
+            for (const desc of ['Send', 'send', 'Kirim', 'kirim', 'Post']) {
+                const r = this.findByContentDesc(xml, desc);
+                if (r.success && r.y > H * 0.75) {
+                    await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
+                    console.log(`[${worker.deviceId}] ✅ Send Live (desc "${desc}") at (${r.x}, ${r.y})`);
+                    return true;
+                }
+            }
+
+            // Strategy 3: Find EditText with text → send button is at the RIGHT END of same row
+            const editRegex = /(<node[^>]*class="android\.widget\.EditText"[^>]*>)/g;
+            let em;
+            while ((em = editRegex.exec(xml)) !== null) {
+                const node = em[1];
+                if (/package="com\.android\.adbkeyboard"/.test(node)) continue;
+                const textMatch = node.match(/\btext="([^"]*)"/);
+                const hasText = textMatch && textMatch[1] && textMatch[1].length > 0;
+                if (!hasText) continue;
+
+                const bm = node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+                if (!bm) continue;
+                const editY = Math.round((parseInt(bm[2]) + parseInt(bm[4])) / 2);
+                const editRight = parseInt(bm[3]);
+
+                // Send button is to the right of EditText, same Y
+                // Look for clickable nodes to the right of EditText on same row
+                const rightNodes = [];
+                const nodeRegex = /<node\s+([^>]+)>/g;
+                let nm;
+                while ((nm = nodeRegex.exec(xml)) !== null) {
+                    const attrs = nm[1];
+                    if (/package="com\.android\.adbkeyboard"/.test(attrs)) continue;
+                    const nbm = attrs.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+                    if (!nbm) continue;
+                    const nx1 = parseInt(nbm[1]), ny1 = parseInt(nbm[2]);
+                    const nx2 = parseInt(nbm[3]), ny2 = parseInt(nbm[4]);
+                    const ncx = Math.round((nx1 + nx2) / 2);
+                    const ncy = Math.round((ny1 + ny2) / 2);
+                    const nw = nx2 - nx1, nh = ny2 - ny1;
+
+                    // Must be: to the right of EditText, same row (Y within ±5%), small-ish
+                    if (ncx > editRight && Math.abs(ncy - editY) < H * 0.05 && nw < W * 0.25 && nh < H * 0.10) {
+                        if (/clickable="true"/.test(attrs) || /ImageView|Button/.test(attrs)) {
+                            rightNodes.push({ x: ncx, y: ncy });
+                        }
+                    }
+                }
+
+                if (rightNodes.length > 0) {
+                    // Take rightmost = send button
+                    rightNodes.sort((a, b) => b.x - a.x);
+                    const send = rightNodes[0];
+                    await worker.execAdb(`shell input tap ${send.x} ${send.y}`);
+                    console.log(`[${worker.deviceId}] ✅ Send Live (right of EditText) at (${send.x}, ${send.y})`);
+                    return true;
+                }
+            }
+        }
+
+        // Fallback: In TikTok live, send button is at far right of input row (~93% X, ~93% Y)
+        // But we need to be on the SAME row as input, not below
+        const x = Math.round(W * 0.90);
+        const y = Math.round(H * 0.925);
+        await worker.execAdb(`shell input tap ${x} ${y}`);
+        console.log(`[${worker.deviceId}] ⚠️ Send Live (fallback) at (${x}, ${y})`);
+        return false;
+    }
+
+    // ================================================
+    // CLICK COMMENT INPUT — LIVE STREAM VERSION
+    // In live, input is always visible at bottom (not in popup panel)
+    // ================================================
+
+    static async clickCommentInputLive(worker) {
+        const W = worker.screenWidth;
+        const H = worker.screenHeight;
+
+        const xml = await this.dumpUI(worker);
+        if (xml) {
+            // Find input by hint text
+            for (const txt of ['type|chat|comment|komentar|Say something|Katakan sesuatu']) {
+                const r = this.findByContentDesc(xml, txt);
+                if (r.success && r.y > H * 0.80) {
+                    await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
+                    console.log(`[${worker.deviceId}] ✅ Live input (desc) at (${r.x}, ${r.y})`);
+                    return true;
+                }
+            }
+
+            // Find EditText in bottom 25%
+            const editRegex = /(<node[^>]*class="android\.widget\.EditText"[^>]*>)/g;
+            let em, edits = [];
+            while ((em = editRegex.exec(xml)) !== null) {
+                const node = em[1];
+                if (/package="com\.android\.adbkeyboard"/.test(node)) continue;
+                const bm = node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+                if (!bm) continue;
+                const cy = Math.round((parseInt(bm[2]) + parseInt(bm[4])) / 2);
+                if (cy > H * 0.75) {
+                    edits.push({ x: Math.round((parseInt(bm[1]) + parseInt(bm[3])) / 2), y: cy });
+                }
+            }
+            if (edits.length > 0) {
+                edits.sort((a, b) => b.y - a.y);
+                await worker.execAdb(`shell input tap ${edits[0].x} ${edits[0].y}`);
+                console.log(`[${worker.deviceId}] ✅ Live input (EditText) at (${edits[0].x}, ${edits[0].y})`);
+                return true;
+            }
+        }
+
+        // Fallback: tap left-center of bottom bar
+        const x = Math.round(W * 0.30);
+        const y = Math.round(H * 0.925);
+        await worker.execAdb(`shell input tap ${x} ${y}`);
+        console.log(`[${worker.deviceId}] ⚠️ Live input (fallback) at (${x}, ${y})`);
+        return false;
+    }
+
+    // ================================================
     // TYPING
     // ================================================
 
