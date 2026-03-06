@@ -229,17 +229,24 @@ class DeviceWorker {
     }
 
     async executeTask(task, jobId) {
-        // Detect display before first task
-        if (!this.resolutionDetected) {
-            await this.detectDisplay();
-            this.resolutionDetected = true;
-        }
-
+        // Mark busy IMMEDIATELY so workerLoop doesn't double-assign
         this.status = 'busy';
         this.currentTask = task;
         this.currentJobId = jobId;
 
         try {
+            // Detect display before first task (now safe — status already 'busy')
+            if (!this.resolutionDetected) {
+                try {
+                    await this.detectDisplay();
+                    this.resolutionDetected = true;
+                } catch (e) {
+                    // detectDisplay failed (device offline/timeout) — use defaults, don't block
+                    console.log(`[${this.deviceId}] ⚠️ detectDisplay failed, using defaults: ${e.message}`);
+                    this.resolutionDetected = true; // Don't retry every time
+                }
+            }
+
             const result = await this.runTaskScript(task);
 
             this.status = 'idle';

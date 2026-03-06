@@ -31,7 +31,7 @@ class SuperMarketingTask {
         } = config;
 
         const db = worker.db;
-        let stats = { cyclesCompleted: 0, totalUrlsWatched: 0, totalWatchTime: 0, likes: 0 };
+        let stats = { cyclesCompleted: 0, totalUrlsWatched: 0, totalWatchTime: 0, likes: 0, errors: 0 };
         const tier = this.getDeviceTier(worker);
 
         const checkCancelled = () => {
@@ -67,12 +67,13 @@ class SuperMarketingTask {
             console.log(`[${worker.deviceId}] 🎯 Super Marketing | ${totalCycles} cycles, ${urls.length} URLs, screen ${worker.screenWidth}x${worker.screenHeight}, tier: ${tier}`);
             console.log(`[${worker.deviceId}] ❤️ Like: ${likeEnabled ? `${likeChance}% (double-tap only)` : 'OFF'}`);
 
-            // Random stagger 0-3s so 100 devices don't all hit ADB at the same time
-            await worker.sleep(worker.randomInt(0, 3000));
+            // Random stagger 0-10s so 100 devices don't all hit ADB at the same time
+            // With 100 devices, spreading over 10s = ~10 devices/sec (safe for ADB server)
+            await worker.sleep(worker.randomInt(0, 10000));
 
-            // Close & go home (lightweight, no UI dump needed)
-            await UIHelper.closeTikTok(worker);
-            await UIHelper.goHome(worker);
+            // Close & go home (safe — won't throw)
+            try { await UIHelper.closeTikTok(worker); } catch (e) { }
+            try { await UIHelper.goHome(worker); } catch (e) { }
 
             // Idle delay
             const idleDelay = worker.randomInt(idleDelayMin, idleDelayMax);
@@ -82,90 +83,130 @@ class SuperMarketingTask {
             }
             if (worker.status === 'paused') await worker.waitForResume();
 
-            // Open TikTok
-            await UIHelper.openTikTok(worker);
+            // Open TikTok with retry
+            try {
+                await UIHelper.openTikTok(worker);
+            } catch (e) {
+                console.log(`[${worker.deviceId}] ⚠️ openTikTok failed, retrying...`);
+                await worker.sleep(3000);
+                await UIHelper.openTikTok(worker);
+            }
             if (worker.status === 'paused') await worker.waitForResume();
 
             // FYP scroll (uses swipe — no UI dump)
             const actualScrolls = worker.randomInt(0, scrollCount);
             for (let i = 0; i < actualScrolls; i++) {
                 if (worker.status === 'paused') await worker.waitForResume();
-                await UIHelper.swipeFYP(worker);
+                try { await UIHelper.swipeFYP(worker); } catch (e) { }
                 await worker.sleep(worker.randomInt(scrollDelayMin, scrollDelayMax) * 1000);
                 if (likeEnabled && Math.random() < 0.1) {
-                    await this.doubleTapLikeCenter(worker);
-                    stats.likes++;
+                    try { await this.doubleTapLikeCenter(worker); stats.likes++; } catch (e) { }
                 }
             }
 
-            // Main loop
+            // ============================================================
+            // MAIN LOOP — each cycle wrapped in try-catch
+            // One ADB timeout won't kill the entire 1000-cycle task!
+            // ============================================================
+            let consecutiveErrors = 0;
+
             for (let cycle = 0; cycle < totalCycles; cycle++) {
                 checkCancelled();
                 if (worker.status === 'paused') await worker.waitForResume();
-                console.log(`[${worker.deviceId}] 🔄 Cycle ${cycle + 1}/${totalCycles}`);
 
-                const shuffledUrls = [...urls].sort(() => Math.random() - 0.5);
+                try {
+                    console.log(`[${worker.deviceId}] 🔄 Cycle ${cycle + 1}/${totalCycles}`);
 
-                for (let ui = 0; ui < shuffledUrls.length; ui++) {
-                    checkCancelled();
-                    if (worker.status === 'paused') await worker.waitForResume();
+                    const shuffledUrls = [...urls].sort(() => Math.random() - 0.5);
 
-                    if (cycle > 0 || ui > 0) {
-                        await worker.sleep(worker.randomInt(1, openUrlDelay) * 1000);
-                    }
-
-                    // Open URL with retry (uses am start — no UI dump)
-                    let opened = false;
-                    for (let r = 0; r < 2; r++) {
-                        try {
-                            await UIHelper.openUrl(worker, shuffledUrls[ui]);
-                            opened = true;
-                            break;
-                        } catch (e) { if (r === 0) await worker.sleep(2000); }
-                    }
-                    if (!opened) { console.log(`[${worker.deviceId}] ❌ URL failed, skip`); continue; }
-
-                    // Watch video
-                    const dur = worker.randomInt(durationMin, durationMax);
-                    console.log(`[${worker.deviceId}] 👁️ Watching ${dur}s (${ui + 1}/${shuffledUrls.length})...`);
-
-                    const watchEnd = Date.now() + (dur * 1000);
-                    let lastAction = 0;
-
-                    while (Date.now() < watchEnd) {
+                    for (let ui = 0; ui < shuffledUrls.length; ui++) {
                         checkCancelled();
                         if (worker.status === 'paused') await worker.waitForResume();
-                        
-                        // Sleep 2s instead of 500ms — with 100 devices, 500ms = 200 wakeups/sec!
-                        // 2s = 50 wakeups/sec total, much lighter on CPU
-                        await worker.sleep(2000);
-                        
-                        if (!likeEnabled) continue;
-                        const now = Date.now();
-                        if (now - lastAction < 5000) continue;
-                        if (Math.random() * 100 < likeChance) {
-                            await this.doubleTapLikeCenter(worker);
-                            lastAction = now;
-                            stats.likes++;
+
+                        if (cycle > 0 || ui > 0) {
+                            await worker.sleep(worker.randomInt(1, openUrlDelay) * 1000);
                         }
+
+                        // Open URL with retry (3 attempts)
+                        let opened = false;
+                        for (let r = 0; r < 3; r++) {
+                            try {
+                                await UIHelper.openUrl(worker, shuffledUrls[ui]);
+                                opened = true;
+                                break;
+                            } catch (e) {
+                                if (r < 2) await worker.sleep(2000 * (r + 1));
+                            }
+                        }
+                        if (!opened) { console.log(`[${worker.deviceId}] ❌ URL failed after 3 retries, skip`); continue; }
+
+                        // Watch video
+                        const dur = worker.randomInt(durationMin, durationMax);
+                        console.log(`[${worker.deviceId}] 👁️ Watching ${dur}s (${ui + 1}/${shuffledUrls.length})...`);
+
+                        const watchEnd = Date.now() + (dur * 1000);
+                        let lastAction = 0;
+
+                        while (Date.now() < watchEnd) {
+                            checkCancelled();
+                            if (worker.status === 'paused') await worker.waitForResume();
+                            
+                            await worker.sleep(2000);
+                            
+                            if (!likeEnabled) continue;
+                            const now = Date.now();
+                            if (now - lastAction < 5000) continue;
+                            if (Math.random() * 100 < likeChance) {
+                                try {
+                                    await this.doubleTapLikeCenter(worker);
+                                    lastAction = now;
+                                    stats.likes++;
+                                } catch (e) { /* like failed, no big deal */ }
+                            }
+                        }
+
+                        stats.totalWatchTime += dur;
+                        stats.totalUrlsWatched++;
                     }
 
-                    stats.totalWatchTime += dur;
-                    stats.totalUrlsWatched++;
-                }
+                    stats.cyclesCompleted++;
+                    consecutiveErrors = 0; // Reset on success
+                    if (jobId && db) { try { db.incrementJobProgress(jobId, 1); } catch (e) { } }
 
-                stats.cyclesCompleted++;
-                if (jobId && db) { try { db.incrementJobProgress(jobId, 1); } catch (e) { } }
+                    if (cycle < totalCycles - 1 && Math.random() < 0.3) {
+                        try { await UIHelper.swipeFYP(worker); } catch (e) { }
+                        await worker.sleep(worker.randomInt(1000, 2000));
+                    }
 
-                if (cycle < totalCycles - 1 && Math.random() < 0.3) {
-                    await UIHelper.swipeFYP(worker);
-                    await worker.sleep(worker.randomInt(1000, 2000));
+                } catch (cycleError) {
+                    // If it's a cancel, re-throw immediately
+                    if (cycleError.message && cycleError.message.includes('cancelled')) throw cycleError;
+
+                    // Otherwise: log error, recover, and continue to next cycle
+                    consecutiveErrors++;
+                    stats.errors++;
+                    console.error(`[${worker.deviceId}] ⚠️ Cycle ${cycle + 1} error: ${cycleError.message}`);
+                    console.log(`[${worker.deviceId}] 🔄 Recovering... (consecutive: ${consecutiveErrors}, total: ${stats.errors})`);
+
+                    // Try to recover: close TikTok, wait, reopen
+                    try { await UIHelper.closeTikTok(worker); } catch (e) { }
+                    await worker.sleep(3000);
+                    try { await UIHelper.goHome(worker); } catch (e) { }
+                    await worker.sleep(2000);
+                    try { await UIHelper.openTikTok(worker); } catch (e) { }
+                    await worker.sleep(3000);
+
+                    // If 5 consecutive errors, device might be dead/disconnected
+                    if (consecutiveErrors >= 5) {
+                        console.error(`[${worker.deviceId}] ❌ ${consecutiveErrors} consecutive errors, stopping task`);
+                        throw new Error(`${consecutiveErrors} consecutive cycle errors — device may be offline`);
+                    }
                 }
             }
 
-            await UIHelper.closeTikTok(worker);
-            await UIHelper.goHome(worker);
-            console.log(`[${worker.deviceId}] ✅ Done! ${stats.cyclesCompleted} cycles, ${stats.totalUrlsWatched} URLs, ${stats.likes} likes`);
+            try { await UIHelper.closeTikTok(worker); } catch (e) { }
+            try { await UIHelper.goHome(worker); } catch (e) { }
+            console.log(`[${worker.deviceId}] ✅ Done! ${stats.cyclesCompleted}/${totalCycles} cycles, ${stats.totalUrlsWatched} URLs, ${stats.likes} likes, ${stats.errors} recovered errors`);
 
             return stats;
         } catch (error) {

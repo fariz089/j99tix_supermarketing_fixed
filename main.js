@@ -169,10 +169,77 @@ function scanAdbDevices() {
 let lastLoopLog = Date.now();
 const pendingDbWrites = new Set();
 let dbWriteTimer = null;
+let lastStaleCheck = Date.now();
+
+/**
+ * Recover stale tasks — tasks stuck in 'running' status because:
+ * 1. Worker crashed/disconnected during execution
+ * 2. detectDisplay threw an uncaught error (now fixed)
+ * 3. ADB timeout left worker in limbo
+ * 
+ * Also auto-retry failed tasks so devices don't go permanently idle.
+ */
+function recoverStaleTasks() {
+    try {
+        const runningJobs = db.getAllJobs().filter(j => j.status === 'running');
+        
+        for (const job of runningJobs) {
+            // 1. Find tasks stuck in 'running' whose worker is actually idle
+            const stuckTasks = [];
+            const stmt = db.db.prepare(`
+                SELECT id, assigned_device FROM tasks 
+                WHERE job_id = ? AND status = 'running'
+            `);
+            stmt.bind([job.id]);
+            while (stmt.step()) {
+                const row = stmt.getAsObject();
+                const worker = workers.get(row.assigned_device);
+                // If worker doesn't exist, is idle, or is working on a DIFFERENT task
+                if (!worker || worker.status === 'idle' || 
+                    (worker.status === 'busy' && worker.currentTask && worker.currentTask.id !== row.id)) {
+                    stuckTasks.push(row.id);
+                }
+            }
+            stmt.free();
+            
+            if (stuckTasks.length > 0) {
+                console.log(`[Recovery] Found ${stuckTasks.length} stuck 'running' tasks, resetting to 'pending'`);
+                stuckTasks.forEach(taskId => {
+                    db.db.run("UPDATE tasks SET status = 'pending', error = NULL WHERE id = ?", [taskId]);
+                });
+                db.save();
+            }
+
+            // 2. Auto-retry failed tasks (reset to 'pending' so device can try again)
+            const failedStmt = db.db.prepare(`
+                SELECT COUNT(*) as cnt FROM tasks 
+                WHERE job_id = ? AND status = 'failed'
+            `);
+            failedStmt.bind([job.id]);
+            if (failedStmt.step()) {
+                const failedCount = failedStmt.getAsObject().cnt;
+                if (failedCount > 0) {
+                    console.log(`[Recovery] Auto-retrying ${failedCount} failed tasks for job ${job.id}`);
+                    db.db.run("UPDATE tasks SET status = 'pending', error = NULL WHERE job_id = ? AND status = 'failed'", [job.id]);
+                    db.save();
+                }
+            }
+            failedStmt.free();
+        }
+    } catch (e) {
+        console.error('[Recovery] Error:', e.message);
+    }
+}
 
 function workerLoop() {
     try {
         const runningJobs = db.getAllJobs().filter(j => j.status === 'running');
+
+        // Run stale task recovery every 30 seconds
+        if (Date.now() - lastStaleCheck > 30000) {
+            lastStaleCheck = Date.now();
+            recoverStaleTasks();
+        }
 
         if (Date.now() - lastLoopLog > 10000) {
             const activeWorkers = Array.from(workers.values()).filter(w => w.status === 'busy').length;
@@ -192,6 +259,10 @@ function workerLoop() {
                         worker.executeTask(task, job.id).then(result => {
                             procesTaskResult(task.id, job.id, result, deviceId);
                         }).catch(error => {
+                            // CRITICAL: If executeTask promise rejects, reset worker status
+                            worker.status = 'idle';
+                            worker.currentTask = null;
+                            worker.currentJobId = null;
                             if (!error.message || !error.message.includes('Database closed')) {
                                 console.error(`[${deviceId}] Task error:`, error.message);
                             }
@@ -274,9 +345,43 @@ function startWorkerLoop() {
 
     workerLoopInterval = setInterval(() => {
         setImmediate(() => workerLoop());
-    }, 1000);
+    }, 200);
 
     console.log('Worker loop started');
+}
+
+/**
+ * Pre-detect display for all workers in parallel batches
+ * This eliminates the 3-8s per-device delay when first job starts
+ */
+async function preDetectAllDisplays() {
+    const allWorkers = Array.from(workers.values());
+    const undetected = allWorkers.filter(w => !w.resolutionDetected);
+    
+    if (undetected.length === 0) return;
+    
+    console.log(`[PreDetect] Detecting display for ${undetected.length} devices in parallel batches...`);
+    
+    const batchSize = 10; // 10 concurrent ADB calls at a time
+    for (let i = 0; i < undetected.length; i += batchSize) {
+        const batch = undetected.slice(i, i + batchSize);
+        await Promise.allSettled(batch.map(async (worker) => {
+            try {
+                await worker.detectDisplay();
+                worker.resolutionDetected = true;
+                console.log(`[PreDetect] ✓ ${worker.deviceId} (${worker.screenWidth}x${worker.screenHeight})`);
+            } catch (e) {
+                console.log(`[PreDetect] ✗ ${worker.deviceId}: ${e.message}`);
+            }
+        }));
+        // Small gap between batches to avoid ADB overload
+        if (i + batchSize < undetected.length) {
+            await new Promise(r => setTimeout(r, 300));
+        }
+    }
+    
+    const detected = allWorkers.filter(w => w.resolutionDetected).length;
+    console.log(`[PreDetect] Done: ${detected}/${allWorkers.length} devices ready`);
 }
 
 function stopWorkerLoop() {
@@ -1065,6 +1170,8 @@ ipcMain.handle('scan-adb-devices', async () => {
 ipcMain.handle('reconnect-devices', async () => {
     try {
         const onlineDevices = await initAdbAndReconnect();
+        // Pre-detect display for newly connected devices
+        preDetectAllDisplays().catch(e => console.error('[PreDetect] Error:', e.message));
         return { success: true, onlineDevices, totalKnown: devices.length };
     } catch (error) {
         return { success: false, error: error.message };
@@ -1221,7 +1328,9 @@ app.whenReady().then(async () => {
     loadDevices();
     
     // Auto-start ADB and reconnect devices (critical after PC restart!)
-    initAdbAndReconnect().catch(e => console.error('[ADB] Init error:', e.message));
+    initAdbAndReconnect()
+        .then(() => preDetectAllDisplays())
+        .catch(e => console.error('[ADB] Init error:', e.message));
 
     createMainWindow();
 
