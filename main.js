@@ -186,13 +186,12 @@ function recoverStaleTasks() {
         for (const job of runningJobs) {
             // 1. Find tasks stuck in 'running' whose worker is actually idle
             const stuckTasks = [];
-            const stmt = db.db.prepare(`
+            const rows = db.db.prepare(`
                 SELECT id, assigned_device FROM tasks 
                 WHERE job_id = ? AND status = 'running'
-            `);
-            stmt.bind([job.id]);
-            while (stmt.step()) {
-                const row = stmt.getAsObject();
+            `).all(job.id);
+            
+            for (const row of rows) {
                 const worker = workers.get(row.assigned_device);
                 // If worker doesn't exist, is idle, or is working on a DIFFERENT task
                 if (!worker || worker.status === 'idle' || 
@@ -200,31 +199,29 @@ function recoverStaleTasks() {
                     stuckTasks.push(row.id);
                 }
             }
-            stmt.free();
             
             if (stuckTasks.length > 0) {
                 console.log(`[Recovery] Found ${stuckTasks.length} stuck 'running' tasks, resetting to 'pending'`);
-                stuckTasks.forEach(taskId => {
-                    db.db.run("UPDATE tasks SET status = 'pending', error = NULL WHERE id = ?", [taskId]);
-                });
-                db.save();
+                const resetStmt = db.db.prepare("UPDATE tasks SET status = 'pending', error = NULL WHERE id = ?");
+                for (const taskId of stuckTasks) {
+                    resetStmt.run(taskId);
+                }
+                // Refresh count cache after bulk update
+                db._refreshCountCache(job.id);
             }
 
             // 2. Auto-retry failed tasks (reset to 'pending' so device can try again)
-            const failedStmt = db.db.prepare(`
+            const failedRow = db.db.prepare(`
                 SELECT COUNT(*) as cnt FROM tasks 
                 WHERE job_id = ? AND status = 'failed'
-            `);
-            failedStmt.bind([job.id]);
-            if (failedStmt.step()) {
-                const failedCount = failedStmt.getAsObject().cnt;
-                if (failedCount > 0) {
-                    console.log(`[Recovery] Auto-retrying ${failedCount} failed tasks for job ${job.id}`);
-                    db.db.run("UPDATE tasks SET status = 'pending', error = NULL WHERE job_id = ? AND status = 'failed'", [job.id]);
-                    db.save();
-                }
+            `).get(job.id);
+            
+            if (failedRow && failedRow.cnt > 0) {
+                console.log(`[Recovery] Auto-retrying ${failedRow.cnt} failed tasks for job ${job.id}`);
+                db.db.prepare("UPDATE tasks SET status = 'pending', error = NULL WHERE job_id = ? AND status = 'failed'")
+                    .run(job.id);
+                db._refreshCountCache(job.id);
             }
-            failedStmt.free();
         }
     } catch (e) {
         console.error('[Recovery] Error:', e.message);
@@ -318,8 +315,8 @@ function processPendingUpdates() {
             
             if (job && job.type === 'super_marketing') {
                 if (counts.failed > 0) {
-                    db.db.run('UPDATE jobs SET failed_count = ? WHERE id = ?', 
-                        [counts.failed, jobId]);
+                    db.db.prepare('UPDATE jobs SET failed_count = ? WHERE id = ?')
+                        .run(counts.failed, jobId);
                     db.save();
                 }
             } else {
@@ -579,7 +576,6 @@ ipcMain.handle('cancel-job', async (event, jobId) => {
         db.updateJobStatus(jobId, 'cancelled');
         db.db.prepare('UPDATE tasks SET status = ? WHERE job_id = ? AND status IN (?, ?)')
             .run('cancelled', jobId, 'pending', 'running');
-        db.save();
 
         if (job && job.deviceIds && job.deviceIds.length > 0) {
             console.log(`[Cancel Job] Closing TikTok on ${job.deviceIds.length} devices...`);
@@ -718,8 +714,6 @@ ipcMain.handle('cancel-all-jobs', async () => {
             notifyJobUpdate(job.id, 'cancelled');
         }
 
-        db.save();
-
         const deviceArray = Array.from(allDeviceIds);
         if (deviceArray.length > 0) {
             console.log(`[Cancel All] Closing TikTok on ${deviceArray.length} devices...`);
@@ -745,12 +739,13 @@ ipcMain.handle('delete-all-jobs', async () => {
 
         console.log(`Deleting ${allJobs.length} job(s)...`);
 
-        try { db.db.run('DELETE FROM tasks'); } catch (e) { }
-        try { db.db.run('DELETE FROM job_comments'); } catch (e) { }
-        try { db.db.run('DELETE FROM job_comment_cycles'); } catch (e) { }
-        try { db.db.run('DELETE FROM jobs'); } catch (e) { }
+        try { db.db.exec('DELETE FROM tasks'); } catch (e) { }
+        try { db.db.exec('DELETE FROM job_comments'); } catch (e) { }
+        try { db.db.exec('DELETE FROM job_comment_cycles'); } catch (e) { }
+        try { db.db.exec('DELETE FROM jobs'); } catch (e) { }
 
-        db.save();
+        // Clear count cache
+        db._countCache.clear();
 
         console.log(`Deleted ${allJobs.length} job(s)`);
         allJobs.forEach(job => notifyJobUpdate(job.id, 'deleted'));
@@ -1296,17 +1291,14 @@ async function cancelAllJobsOnQuit() {
             db.updateJobStatus(job.id, 'cancelled');
 
             const stmt = db.db.prepare('UPDATE tasks SET status = ? WHERE job_id = ? AND status IN (?, ?)');
-            stmt.run(['cancelled', job.id, 'pending', 'running']);
-            stmt.free();
+            stmt.run('cancelled', job.id, 'pending', 'running');
 
             if (job.deviceIds && Array.isArray(job.deviceIds)) {
                 job.deviceIds.forEach(id => allDeviceIds.add(id));
             }
         }
 
-        const data = db.db.export();
-        const buffer = Buffer.from(data);
-        fs.writeFileSync(db.dbPath, buffer);
+        // better-sqlite3 auto-persists, no export needed
 
         const deviceArray = Array.from(allDeviceIds);
         if (deviceArray.length > 0) {
