@@ -35,9 +35,9 @@ class SuperMarketingTask {
         const tier = this.getDeviceTier(worker);
 
         const checkCancelled = () => {
-            if (jobId && db) {
-                const job = db.getJob(jobId);
-                if (job && job.status === 'cancelled') throw new Error('Job cancelled by user');
+            // FIX: Use in-memory cancel check instead of DB query
+            if (jobId && worker.isJobCancelled(jobId)) {
+                throw new Error('Job cancelled by user');
             }
         };
 

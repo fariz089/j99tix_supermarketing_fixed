@@ -432,12 +432,37 @@ async function deleteAllJobs() {
 }
 
 
+// FIX: Debounce job update events to prevent IPC flooding.
+// Before: every 'job-update' event triggered a full refreshJobs() → IPC get-jobs → synchronous DB query.
+// With 20 devices completing tasks rapidly, this caused dozens of DB queries per second.
+let refreshDebounceTimer = null;
+let isRefreshing = false;
+
+function debouncedRefresh() {
+    if (refreshDebounceTimer) return; // already scheduled
+    refreshDebounceTimer = setTimeout(async () => {
+        refreshDebounceTimer = null;
+        if (!isRefreshing) {
+            isRefreshing = true;
+            await refreshJobs();
+            isRefreshing = false;
+        }
+    }, 500); // max 1 refresh per 500ms
+}
+
 // Listen to updates
 window.electronAPI.onJobUpdate((data) => {
-    console.log('Job update received:', data);
-    refreshJobs();
+    console.log('Job update received:', data.event);
+    debouncedRefresh();
 });
 
 // Init
 refreshJobs();
-setInterval(() => refreshJobs(), 3000);
+// FIX: Reduced polling from 3s to 10s. Most updates come via events anyway.
+// This is just a safety net for missed events, not the primary refresh mechanism.
+setInterval(() => {
+    if (!isRefreshing) {
+        isRefreshing = true;
+        refreshJobs().finally(() => { isRefreshing = false; });
+    }
+}, 10000);

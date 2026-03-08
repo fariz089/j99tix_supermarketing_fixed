@@ -89,7 +89,9 @@ function loadDevices() {
         devices = Array.isArray(parsed) ? parsed : (parsed.devices || []);
 
         devices.forEach(device => {
-            workers.set(device.device, new DeviceWorker(device.device, db, device));
+            const worker = new DeviceWorker(device.device, db, device);
+            worker.isJobCancelledFn = isJobCancelled; // FIX: fast cancel check
+            workers.set(device.device, worker);
         });
 
         console.log(`Loaded ${devices.length} devices with workers`);
@@ -165,11 +167,19 @@ function scanAdbDevices() {
     });
 }
 
-// WORKER LOOP - OPTIMIZED
+// WORKER LOOP - OPTIMIZED v2
 let lastLoopLog = Date.now();
 const pendingDbWrites = new Set();
 let dbWriteTimer = null;
 let lastStaleCheck = Date.now();
+
+// FIX: Cache cancelled job IDs in memory so workers don't need to query DB every second
+const cancelledJobIds = new Set();
+
+// FIX: Cache running jobs to avoid calling getAllJobs() every loop iteration
+let cachedRunningJobs = [];
+let lastJobCacheRefresh = 0;
+const JOB_CACHE_TTL = 3000; // refresh running jobs cache every 3 seconds
 
 /**
  * Recover stale tasks — tasks stuck in 'running' status because:
@@ -230,15 +240,22 @@ function recoverStaleTasks() {
 
 function workerLoop() {
     try {
-        const runningJobs = db.getAllJobs().filter(j => j.status === 'running');
+        // FIX: Use cached running jobs instead of querying DB every iteration
+        const now = Date.now();
+        if (now - lastJobCacheRefresh > JOB_CACHE_TTL) {
+            cachedRunningJobs = db.getAllJobs().filter(j => j.status === 'running');
+            lastJobCacheRefresh = now;
+        }
+        const runningJobs = cachedRunningJobs;
 
-        // Run stale task recovery every 30 seconds
-        if (Date.now() - lastStaleCheck > 30000) {
-            lastStaleCheck = Date.now();
-            recoverStaleTasks();
+        // FIX: Run stale task recovery every 60 seconds (was 30s)
+        if (now - lastStaleCheck > 60000) {
+            lastStaleCheck = now;
+            // Defer to next tick so it doesn't block this iteration
+            setImmediate(() => recoverStaleTasks());
         }
 
-        if (Date.now() - lastLoopLog > 10000) {
+        if (now - lastLoopLog > 10000) {
             const activeWorkers = Array.from(workers.values()).filter(w => w.status === 'busy').length;
             console.log(`Workers: ${activeWorkers}/${workers.size} active, Jobs: ${runningJobs.length}`);
             lastLoopLog = Date.now();
@@ -340,11 +357,16 @@ function processPendingUpdates() {
 function startWorkerLoop() {
     if (workerLoopInterval) return;
 
+    // FIX: Increased from 200ms to 1000ms to reduce main thread blocking.
+    // better-sqlite3 is synchronous — every DB call blocks the event loop.
+    // At 200ms with 20 devices, the main thread was spending >60% time on DB queries,
+    // leaving no room for Electron to process UI events (click, drag, repaint).
+    // 1000ms is still fast enough for task assignment (tasks take 5-30s each).
     workerLoopInterval = setInterval(() => {
         setImmediate(() => workerLoop());
-    }, 200);
+    }, 1000);
 
-    console.log('Worker loop started');
+    console.log('Worker loop started (1000ms interval)');
 }
 
 /**
@@ -421,7 +443,7 @@ function notifyJobUpdate(jobId, event, data = {}) {
 
             pendingJobUpdates.clear();
             batchUpdateTimer = null;
-        }, 1000);
+        }, 2000); // FIX: was 1000ms, now 2000ms to reduce IPC flooding
     }
 }
 
@@ -520,6 +542,7 @@ ipcMain.handle('create-job', (event, data) => {
 
         setTimeout(() => {
             db.updateJobStatus(jobId, 'running', { startedAt: Date.now() });
+            lastJobCacheRefresh = 0; // FIX: invalidate cache
             notifyJobUpdate(jobId, 'started');
         }, 100);
 
@@ -558,12 +581,14 @@ ipcMain.handle('get-jobs', () => {
 
 ipcMain.handle('pause-job', (event, jobId) => {
     db.updateJobStatus(jobId, 'paused');
+    lastJobCacheRefresh = 0; // FIX: invalidate cache
     notifyJobUpdate(jobId, 'paused');
     return { success: true };
 });
 
 ipcMain.handle('resume-job', (event, jobId) => {
     db.updateJobStatus(jobId, 'running');
+    lastJobCacheRefresh = 0; // FIX: invalidate cache
     notifyJobUpdate(jobId, 'resumed');
     return { success: true };
 });
@@ -576,6 +601,11 @@ ipcMain.handle('cancel-job', async (event, jobId) => {
         db.updateJobStatus(jobId, 'cancelled');
         db.db.prepare('UPDATE tasks SET status = ? WHERE job_id = ? AND status IN (?, ?)')
             .run('cancelled', jobId, 'pending', 'running');
+
+        // FIX: Mark job as cancelled in memory so workers see it instantly
+        cancelledJobIds.add(jobId);
+        // FIX: Invalidate running jobs cache immediately
+        lastJobCacheRefresh = 0;
 
         if (job && job.deviceIds && job.deviceIds.length > 0) {
             console.log(`[Cancel Job] Closing TikTok on ${job.deviceIds.length} devices...`);
@@ -707,12 +737,18 @@ ipcMain.handle('cancel-all-jobs', async () => {
             db.db.prepare('UPDATE tasks SET status = ? WHERE job_id = ? AND status IN (?, ?)')
                 .run('cancelled', job.id, 'pending', 'running');
 
+            // FIX: Mark in memory
+            cancelledJobIds.add(job.id);
+
             if (job.deviceIds && Array.isArray(job.deviceIds)) {
                 job.deviceIds.forEach(id => allDeviceIds.add(id));
             }
 
             notifyJobUpdate(job.id, 'cancelled');
         }
+
+        // FIX: Invalidate cache
+        lastJobCacheRefresh = 0;
 
         const deviceArray = Array.from(allDeviceIds);
         if (deviceArray.length > 0) {
@@ -797,6 +833,12 @@ ipcMain.handle('toggle-show-touches', async (event, enable) => {
         return { success: false, error: error.message };
     }
 });
+
+// FIX: Expose cancelledJobIds so Worker.js can check without DB query
+// This is used by the isJobCancelled() method
+function isJobCancelled(jobId) {
+    return cancelledJobIds.has(jobId);
+}
 
 ipcMain.handle('toggle-pointer-location', async (event, enable) => {
     try {

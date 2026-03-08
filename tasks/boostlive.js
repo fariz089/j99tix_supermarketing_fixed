@@ -26,8 +26,26 @@ class BoostLiveTask {
         let lastCommentTime = 0;
         let lastLikeTime = 0;
 
+        // FIX: Use in-memory cancel check instead of DB query every second.
+        // Before: 20 devices × 1 query/sec = 20 synchronous DB queries/sec just for cancel checks.
+        // After: O(1) memory lookup, zero DB load.
+        let lastDbCancelCheck = 0;
+        const DB_CANCEL_CHECK_INTERVAL = 10000; // fallback DB check every 10s
+
         const checkCancelled = async () => {
-            if (jobId && db) {
+            if (!jobId) return false;
+            
+            // Fast path: in-memory check (no DB query)
+            if (worker.isJobCancelled(jobId)) {
+                await UIHelper.closeTikTok(worker);
+                await UIHelper.goHome(worker);
+                return true;
+            }
+            
+            // Slow fallback: only check DB every 10 seconds (if fast check unavailable)
+            const now = Date.now();
+            if (!worker.isJobCancelledFn && db && (now - lastDbCancelCheck > DB_CANCEL_CHECK_INTERVAL)) {
+                lastDbCancelCheck = now;
                 const job = db.getJob(jobId);
                 if (job && job.status === 'cancelled') {
                     await UIHelper.closeTikTok(worker);

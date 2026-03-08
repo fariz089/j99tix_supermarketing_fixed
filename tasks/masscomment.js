@@ -26,9 +26,8 @@ class MassCommentTask {
                 await worker.sleep(deviceStartDelay * 1000);
             }
 
-            if (jobId && db) {
-                const job = db.getJob(jobId);
-                if (job && job.status === 'cancelled') throw new Error('Job cancelled by user');
+            if (jobId && worker.isJobCancelled(jobId)) {
+                throw new Error('Job cancelled by user');
             }
 
             // Random idle delay

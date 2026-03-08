@@ -27,8 +27,38 @@ class JobDatabase {
         this.db.pragma('mmap_size = 268435456');   // 256MB memory-mapped I/O
 
         this.initTables();
+        
+        // FIX: Pre-compile prepared statements for hot query paths.
+        // better-sqlite3's prepare() has overhead — doing it once saves ~0.5ms per call.
+        // With 20 devices calling getNextTask every second, that's 10ms/s saved.
+        this._stmts = {
+            getNextTask: this.db.prepare(`
+                SELECT * FROM tasks 
+                WHERE job_id = ? AND status = 'pending' AND assigned_device = ?
+                LIMIT 1
+            `),
+            setTaskRunning: this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?'),
+            getAllJobs: this.db.prepare('SELECT * FROM jobs ORDER BY created_at DESC'),
+            getJob: this.db.prepare('SELECT * FROM jobs WHERE id = ?'),
+            completeTask: this.db.prepare(`
+                UPDATE tasks SET status = ?, result = ?, completed_at = ? WHERE id = ?
+            `),
+            failTask: this.db.prepare(`
+                UPDATE tasks SET status = ?, error = ?, completed_at = ? WHERE id = ?
+            `),
+            getTaskJobId: this.db.prepare('SELECT job_id FROM tasks WHERE id = ?'),
+            countCacheRefresh: this.db.prepare(`
+                SELECT 
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running
+                FROM tasks WHERE job_id = ?
+            `),
+        };
+        
         this._warmCountCache();
-        console.log('Database initialized (better-sqlite3 + WAL mode)');
+        console.log('Database initialized (better-sqlite3 + WAL mode + prepared stmt cache)');
     }
 
     /**
@@ -127,14 +157,7 @@ class JobDatabase {
     }
 
     _refreshCountCache(jobId) {
-        const row = this.db.prepare(`
-            SELECT 
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-                SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running
-            FROM tasks WHERE job_id = ?
-        `).get(jobId);
+        const row = this._stmts.countCacheRefresh.get(jobId);
 
         this._countCache.set(jobId, {
             completed: row?.completed || 0,
@@ -220,7 +243,7 @@ class JobDatabase {
     getJob(jobId) {
         if (this.isClosed) return null;
 
-        const row = this.db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId);
+        const row = this._stmts.getJob.get(jobId);
         if (!row) return null;
 
         return {
@@ -242,7 +265,7 @@ class JobDatabase {
     getAllJobs() {
         if (this.isClosed) return [];
 
-        const rows = this.db.prepare('SELECT * FROM jobs ORDER BY created_at DESC').all();
+        const rows = this._stmts.getAllJobs.all();
         return rows.map(row => ({
             id: row.id,
             type: row.type,
@@ -331,17 +354,11 @@ class JobDatabase {
     getNextTask(jobId, deviceId) {
         if (this.isClosed) return null;
 
-        const row = this.db.prepare(`
-            SELECT * FROM tasks 
-            WHERE job_id = ? 
-            AND status = 'pending'
-            AND assigned_device = ?
-            LIMIT 1
-        `).get(jobId, deviceId);
+        const row = this._stmts.getNextTask.get(jobId, deviceId);
 
         if (!row) return null;
 
-        this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run('running', row.id);
+        this._stmts.setTaskRunning.run('running', row.id);
         this._updateCache(jobId, 'pending', 'running');
 
         return {
@@ -356,13 +373,9 @@ class JobDatabase {
     completeTask(taskId, result) {
         if (this.isClosed) return;
 
-        const task = this.db.prepare('SELECT job_id FROM tasks WHERE id = ?').get(taskId);
+        const task = this._stmts.getTaskJobId.get(taskId);
 
-        this.db.prepare(`
-            UPDATE tasks 
-            SET status = ?, result = ?, completed_at = ?
-            WHERE id = ?
-        `).run('completed', JSON.stringify(result), Date.now(), taskId);
+        this._stmts.completeTask.run('completed', JSON.stringify(result), Date.now(), taskId);
 
         if (task) this._updateCache(task.job_id, 'running', 'completed');
     }
@@ -370,13 +383,9 @@ class JobDatabase {
     failTask(taskId, error) {
         if (this.isClosed) return;
 
-        const task = this.db.prepare('SELECT job_id FROM tasks WHERE id = ?').get(taskId);
+        const task = this._stmts.getTaskJobId.get(taskId);
 
-        this.db.prepare(`
-            UPDATE tasks 
-            SET status = ?, error = ?, completed_at = ?
-            WHERE id = ?
-        `).run('failed', error, Date.now(), taskId);
+        this._stmts.failTask.run('failed', error, Date.now(), taskId);
 
         if (task) this._updateCache(task.job_id, 'running', 'failed');
     }

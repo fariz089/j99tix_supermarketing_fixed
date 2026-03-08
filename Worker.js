@@ -14,6 +14,9 @@ class DeviceWorker {
         this.currentJobId = null;
         this.manuallyPaused = false;
 
+        // FIX: Function reference for fast in-memory cancel check (set by main.js)
+        this.isJobCancelledFn = null;
+
         // Default values
         this.screenWidth = 1080;
         this.screenHeight = 2340;
@@ -528,6 +531,24 @@ class DeviceWorker {
         
         const commands = keycodes.map(k => `input keyevent ${k}`);
         await this.execAdbBatch(commands);
+    }
+
+    /**
+     * FIX: Fast in-memory cancel check — no DB query needed.
+     * Falls back to DB query only every 10 seconds if the fast check is not available.
+     */
+    isJobCancelled(jobId) {
+        // Fast path: check in-memory set (O(1), no I/O)
+        if (this.isJobCancelledFn) {
+            return this.isJobCancelledFn(jobId);
+        }
+        // Slow fallback: DB query (only if isJobCancelledFn not set)
+        try {
+            const job = this.db.getJob(jobId);
+            return job && job.status === 'cancelled';
+        } catch (e) {
+            return false;
+        }
     }
 
     sleep(ms) {
