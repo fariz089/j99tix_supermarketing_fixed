@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec, execSync } = require('child_process');
-const JobDatabase = require('./database');
+const AsyncJobDatabase = require('./database-async');
 const DeviceWorker = require('./Worker');
 const JobGenerator = require('./JobGenerator');
 
@@ -189,70 +189,40 @@ const JOB_CACHE_TTL = 3000; // refresh running jobs cache every 3 seconds
  * 
  * Also auto-retry failed tasks so devices don't go permanently idle.
  */
-function recoverStaleTasks() {
+async function recoverStaleTasks() {
     try {
-        const runningJobs = db.getAllJobs().filter(j => j.status === 'running');
-        
-        for (const job of runningJobs) {
-            // 1. Find tasks stuck in 'running' whose worker is actually idle
-            const stuckTasks = [];
-            const rows = db.db.prepare(`
-                SELECT id, assigned_device FROM tasks 
-                WHERE job_id = ? AND status = 'running'
-            `).all(job.id);
-            
-            for (const row of rows) {
-                const worker = workers.get(row.assigned_device);
-                // If worker doesn't exist, is idle, or is working on a DIFFERENT task
-                if (!worker || worker.status === 'idle' || 
-                    (worker.status === 'busy' && worker.currentTask && worker.currentTask.id !== row.id)) {
-                    stuckTasks.push(row.id);
-                }
-            }
-            
-            if (stuckTasks.length > 0) {
-                console.log(`[Recovery] Found ${stuckTasks.length} stuck 'running' tasks, resetting to 'pending'`);
-                const resetStmt = db.db.prepare("UPDATE tasks SET status = 'pending', error = NULL WHERE id = ?");
-                for (const taskId of stuckTasks) {
-                    resetStmt.run(taskId);
-                }
-                // Refresh count cache after bulk update
-                db._refreshCountCache(job.id);
-            }
-
-            // 2. Auto-retry failed tasks (reset to 'pending' so device can try again)
-            const failedRow = db.db.prepare(`
-                SELECT COUNT(*) as cnt FROM tasks 
-                WHERE job_id = ? AND status = 'failed'
-            `).get(job.id);
-            
-            if (failedRow && failedRow.cnt > 0) {
-                console.log(`[Recovery] Auto-retrying ${failedRow.cnt} failed tasks for job ${job.id}`);
-                db.db.prepare("UPDATE tasks SET status = 'pending', error = NULL WHERE job_id = ? AND status = 'failed'")
-                    .run(job.id);
-                db._refreshCountCache(job.id);
-            }
+        // Build worker status map for the DB worker thread
+        const workerStatusMap = {};
+        for (const [deviceId, worker] of workers.entries()) {
+            workerStatusMap[deviceId] = {
+                status: worker.status,
+                currentTaskId: worker.currentTask ? worker.currentTask.id : null
+            };
+        }
+        const recovered = await db.recoverStaleTasks(workerStatusMap);
+        if (recovered > 0) {
+            console.log(`[Recovery] Recovered ${recovered} tasks`);
         }
     } catch (e) {
         console.error('[Recovery] Error:', e.message);
     }
 }
 
-function workerLoop() {
+async function workerLoop() {
     try {
         // FIX: Use cached running jobs instead of querying DB every iteration
         const now = Date.now();
         if (now - lastJobCacheRefresh > JOB_CACHE_TTL) {
-            cachedRunningJobs = db.getAllJobs().filter(j => j.status === 'running');
+            const allJobs = await db.getAllJobs();
+            cachedRunningJobs = (allJobs || []).filter(j => j.status === 'running');
             lastJobCacheRefresh = now;
         }
         const runningJobs = cachedRunningJobs;
 
-        // FIX: Run stale task recovery every 60 seconds (was 30s)
+        // FIX: Run stale task recovery every 60 seconds
         if (now - lastStaleCheck > 60000) {
             lastStaleCheck = now;
-            // Defer to next tick so it doesn't block this iteration
-            setImmediate(() => recoverStaleTasks());
+            recoverStaleTasks();
         }
 
         if (now - lastLoopLog > 10000) {
@@ -268,7 +238,7 @@ function workerLoop() {
                         continue;
                     }
 
-                    const task = db.getNextTask(job.id, deviceId);
+                    const task = await db.getNextTask(job.id, deviceId);
                     if (task) {
                         worker.executeTask(task, job.id).then(result => {
                             procesTaskResult(task.id, job.id, result, deviceId);
@@ -292,16 +262,16 @@ function workerLoop() {
     }
 }
 
-function procesTaskResult(taskId, jobId, result, deviceId) {
+async function procesTaskResult(taskId, jobId, result, deviceId) {
     try {
         if (result.skipDbUpdate || db.isClosed) {
             return;
         }
 
         if (result.success) {
-            db.completeTask(taskId, result.result);
+            await db.completeTask(taskId, result.result);
         } else {
-            db.failTask(taskId, result.error);
+            await db.failTask(taskId, result.error);
         }
 
         pendingDbWrites.add(jobId);
@@ -319,29 +289,27 @@ function procesTaskResult(taskId, jobId, result, deviceId) {
     }
 }
 
-function processPendingUpdates() {
+async function processPendingUpdates() {
     if (db.isClosed) return;
 
     const jobsToUpdate = Array.from(pendingDbWrites);
     pendingDbWrites.clear();
 
-    jobsToUpdate.forEach(jobId => {
+    for (const jobId of jobsToUpdate) {
         try {
-            const counts = db.getTaskCounts(jobId);
-            const job = db.getJob(jobId);
+            const counts = await db.getTaskCounts(jobId);
+            const job = await db.getJob(jobId);
             
             if (job && job.type === 'super_marketing') {
                 if (counts.failed > 0) {
-                    db.db.prepare('UPDATE jobs SET failed_count = ? WHERE id = ?')
-                        .run(counts.failed, jobId);
-                    db.save();
+                    await db.updateJobFailedCount(jobId, counts.failed);
                 }
             } else {
-                db.updateJobProgress(jobId, counts.completed, counts.failed);
+                await db.updateJobProgress(jobId, counts.completed, counts.failed);
             }
 
             if (counts.pending === 0 && counts.running === 0) {
-                db.updateJobStatus(jobId, 'completed', { completedAt: Date.now() });
+                await db.updateJobStatus(jobId, 'completed', { completedAt: Date.now() });
                 notifyJobUpdate(jobId, 'completed');
             } else {
                 notifyJobUpdate(jobId, 'task_completed');
@@ -351,22 +319,24 @@ function processPendingUpdates() {
                 console.error(`Update job ${jobId} error:`, error.message);
             }
         }
-    });
+    }
 }
 
 function startWorkerLoop() {
     if (workerLoopInterval) return;
 
-    // FIX: Increased from 200ms to 1000ms to reduce main thread blocking.
-    // better-sqlite3 is synchronous — every DB call blocks the event loop.
-    // At 200ms with 20 devices, the main thread was spending >60% time on DB queries,
-    // leaving no room for Electron to process UI events (click, drag, repaint).
-    // 1000ms is still fast enough for task assignment (tasks take 5-30s each).
-    workerLoopInterval = setInterval(() => {
-        setImmediate(() => workerLoop());
-    }, 1000);
-
-    console.log('Worker loop started (1000ms interval)');
+    // FIX v2: Use recursive setTimeout instead of setInterval.
+    // setInterval + async = overlapping calls if async takes longer than interval.
+    // setTimeout chain ensures the next iteration only starts after the previous completes.
+    // With async DB (worker thread), this loop no longer blocks the event loop at all!
+    function scheduleNext() {
+        workerLoopInterval = setTimeout(async () => {
+            await workerLoop();
+            if (workerLoopInterval !== null) scheduleNext();
+        }, 1000);
+    }
+    scheduleNext();
+    console.log('Worker loop started (1000ms async interval, DB on worker thread)');
 }
 
 /**
@@ -447,9 +417,9 @@ function notifyJobUpdate(jobId, event, data = {}) {
     }
 }
 
-function sendJobUpdate(jobId, event, data = {}) {
-    const job = db.getJob(jobId);
-    const counts = job ? db.getTaskCounts(jobId) : null;
+async function sendJobUpdate(jobId, event, data = {}) {
+    const job = await db.getJob(jobId);
+    const counts = job ? await db.getTaskCounts(jobId) : null;
 
     const payload = {
         jobId,
@@ -511,7 +481,7 @@ ipcMain.handle('resume-worker', (event, deviceId) => {
     return { success: false };
 });
 
-ipcMain.handle('create-job', (event, data) => {
+ipcMain.handle('create-job', async (event, data) => {
     const { type, config, deviceIds } = data;
     const jobId = `job_${Date.now()}_${jobCounter++}`;
 
@@ -524,7 +494,7 @@ ipcMain.handle('create-job', (event, data) => {
             initialTotal = deviceIds.length * targetCycles;
         }
 
-        db.createJob({
+        await db.createJob({
             id: jobId,
             type,
             status: 'pending',
@@ -534,20 +504,20 @@ ipcMain.handle('create-job', (event, data) => {
             createdAt: Date.now()
         });
 
-        db.createTasks(tasks);
+        await db.createTasks(tasks);
 
         if (type === 'boost_live' && config.comments && config.comments.length > 0) {
-            db.createCommentPool(jobId, config.comments, deviceIds.length);
+            await db.createCommentPool(jobId, config.comments, deviceIds.length);
         }
 
-        setTimeout(() => {
-            db.updateJobStatus(jobId, 'running', { startedAt: Date.now() });
+        setTimeout(async () => {
+            await db.updateJobStatus(jobId, 'running', { startedAt: Date.now() });
             lastJobCacheRefresh = 0; // FIX: invalidate cache
             notifyJobUpdate(jobId, 'started');
         }, 100);
 
-        const job = db.getJob(jobId);
-        const counts = db.getTaskCounts(jobId);
+        const job = await db.getJob(jobId);
+        const counts = await db.getTaskCounts(jobId);
 
         return {
             success: true,
@@ -559,35 +529,35 @@ ipcMain.handle('create-job', (event, data) => {
     }
 });
 
-ipcMain.handle('get-jobs', () => {
-    const jobs = db.getAllJobs().map(job => {
-        const counts = db.getTaskCounts(job.id);
-        
+ipcMain.handle('get-jobs', async () => {
+    const allJobs = await db.getAllJobs();
+    const jobs = [];
+    for (const job of allJobs) {
+        const counts = await db.getTaskCounts(job.id);
         let completedCount = counts.completed;
         if (job.type === 'super_marketing') {
             completedCount = job.completed_count || 0;
         }
-        
-        return {
+        jobs.push({
             ...job,
             completed: completedCount,
             failed: counts.failed,
             remaining: counts.pending + counts.running,
             total: job.initial_total
-        };
-    });
+        });
+    }
     return { success: true, jobs };
 });
 
-ipcMain.handle('pause-job', (event, jobId) => {
-    db.updateJobStatus(jobId, 'paused');
+ipcMain.handle('pause-job', async (event, jobId) => {
+    await db.updateJobStatus(jobId, 'paused');
     lastJobCacheRefresh = 0; // FIX: invalidate cache
     notifyJobUpdate(jobId, 'paused');
     return { success: true };
 });
 
-ipcMain.handle('resume-job', (event, jobId) => {
-    db.updateJobStatus(jobId, 'running');
+ipcMain.handle('resume-job', async (event, jobId) => {
+    await db.updateJobStatus(jobId, 'running');
     lastJobCacheRefresh = 0; // FIX: invalidate cache
     notifyJobUpdate(jobId, 'resumed');
     return { success: true };
@@ -596,11 +566,10 @@ ipcMain.handle('resume-job', (event, jobId) => {
 // UPDATED: Cancel job now also closes TikTok
 ipcMain.handle('cancel-job', async (event, jobId) => {
     try {
-        const job = db.getJob(jobId);
+        const job = await db.getJob(jobId);
         
-        db.updateJobStatus(jobId, 'cancelled');
-        db.db.prepare('UPDATE tasks SET status = ? WHERE job_id = ? AND status IN (?, ?)')
-            .run('cancelled', jobId, 'pending', 'running');
+        await db.updateJobStatus(jobId, 'cancelled');
+        await db.cancelJobTasks(jobId);
 
         // FIX: Mark job as cancelled in memory so workers see it instantly
         cancelledJobIds.add(jobId);
@@ -621,15 +590,15 @@ ipcMain.handle('cancel-job', async (event, jobId) => {
     }
 });
 
-ipcMain.handle('retry-job', (event, jobId) => {
-    db.retryFailedTasks(jobId);
-    db.updateJobStatus(jobId, 'running');
+ipcMain.handle('retry-job', async (event, jobId) => {
+    await db.retryFailedTasks(jobId);
+    await db.updateJobStatus(jobId, 'running');
     notifyJobUpdate(jobId, 'retrying');
     return { success: true };
 });
 
-ipcMain.handle('delete-job', (event, jobId) => {
-    db.deleteJob(jobId);
+ipcMain.handle('delete-job', async (event, jobId) => {
+    await db.deleteJob(jobId);
     notifyJobUpdate(jobId, 'deleted');
     return { success: true };
 });
@@ -721,7 +690,7 @@ ipcMain.handle('close-tiktok-bulk', async (event, deviceIds) => {
 // UPDATED: Cancel all jobs now also closes TikTok
 ipcMain.handle('cancel-all-jobs', async () => {
     try {
-        const allJobs = db.getAllJobs();
+        const allJobs = await db.getAllJobs();
         const activeJobs = allJobs.filter(j => j.status === 'running' || j.status === 'pending');
 
         if (activeJobs.length === 0) {
@@ -733,9 +702,8 @@ ipcMain.handle('cancel-all-jobs', async () => {
         const allDeviceIds = new Set();
         
         for (const job of activeJobs) {
-            db.updateJobStatus(job.id, 'cancelled');
-            db.db.prepare('UPDATE tasks SET status = ? WHERE job_id = ? AND status IN (?, ?)')
-                .run('cancelled', job.id, 'pending', 'running');
+            await db.updateJobStatus(job.id, 'cancelled');
+            await db.cancelJobTasks(job.id);
 
             // FIX: Mark in memory
             cancelledJobIds.add(job.id);
@@ -767,7 +735,7 @@ ipcMain.handle('cancel-all-jobs', async () => {
 
 ipcMain.handle('delete-all-jobs', async () => {
     try {
-        const allJobs = db.getAllJobs();
+        const allJobs = await db.getAllJobs();
 
         if (allJobs.length === 0) {
             return { success: true, count: 0, message: 'No jobs to delete' };
@@ -775,13 +743,7 @@ ipcMain.handle('delete-all-jobs', async () => {
 
         console.log(`Deleting ${allJobs.length} job(s)...`);
 
-        try { db.db.exec('DELETE FROM tasks'); } catch (e) { }
-        try { db.db.exec('DELETE FROM job_comments'); } catch (e) { }
-        try { db.db.exec('DELETE FROM job_comment_cycles'); } catch (e) { }
-        try { db.db.exec('DELETE FROM jobs'); } catch (e) { }
-
-        // Clear count cache
-        db._countCache.clear();
+        await db.deleteAllData();
 
         console.log(`Deleted ${allJobs.length} job(s)`);
         allJobs.forEach(job => notifyJobUpdate(job.id, 'deleted'));
@@ -800,7 +762,7 @@ ipcMain.handle('refill-comments', async (event, jobId, comments) => {
             return { success: false, error: 'No comments provided' };
         }
 
-        const result = db.refillComments(jobId, comments);
+        const result = await db.refillComments(jobId, comments);
         
         if (result.success) {
             console.log(`[Refill] Added ${result.count} comments to job ${jobId}`);
@@ -817,7 +779,7 @@ ipcMain.handle('refill-comments', async (event, jobId, comments) => {
 // NEW: Get comment stats
 ipcMain.handle('get-comment-stats', async (event, jobId) => {
     try {
-        const stats = db.getCommentStats(jobId);
+        const stats = await db.getCommentStats(jobId);
         return { success: true, stats };
     } catch (error) {
         console.error('Failed to get comment stats:', error);
@@ -892,30 +854,61 @@ function ensureScreenCapture() {
 function ensureStreamer() {
     if (!streamer) {
         streamer = new ScrcpyStreamer({
-            thumbnailWidth: 140, // was 180 — smaller = faster
-            jpegQuality: 30, // was 40 — lower = faster
+            thumbnailWidth: 140,
+            jpegQuality: 30,
             adbPath: ADB_PATH,
             scrcpyPath: SCRCPY_PATH,
-            maxConcurrent: 20, // was 15
-            breathDelay: 20 // minimal delay between frames
+            maxConcurrent: 20,
+            breathDelay: 200 // FIX v2: was 20ms — way too fast for 100 devices!
+                             // 200ms = max 5 FPS per device, but with 100 devices
+                             // the actual rate is ~0.5-1 FPS per device (ADB bottleneck)
         });
 
-        // When streamer emits a frame, push to monitor window AND update legacy cache
+        // FIX v2: THROTTLED frame delivery — batch frames and send max 2x/sec
+        // Instead of per-frame IPC (100s of calls/sec), collect frames in a buffer
+        // and flush to renderer every 500ms. This reduces IPC overhead by 95%+.
+        const frameBatch = new Map(); // deviceId -> latest frameData
+        let batchFlushTimer = null;
+
+        function flushFrameBatch() {
+            if (!monitorWindow || monitorWindow.isDestroyed()) {
+                frameBatch.clear();
+                return;
+            }
+
+            // Send all buffered frames in ONE IPC call
+            if (frameBatch.size > 0) {
+                const frames = Object.fromEntries(frameBatch);
+                monitorWindow.webContents.send('stream-frame-batch', frames);
+                frameBatch.clear();
+            }
+        }
+
+        // When streamer emits a frame, buffer it (don't send immediately)
         streamer.on('frame', (frameData) => {
             // Update legacy cache so getCachedFrames works
             ensureScreenCapture().injectFrame(
                 frameData.deviceId, frameData.data, frameData.mimeType, frameData.size
             );
 
-            // Push frame directly to monitor window (REALTIME!)
-            if (monitorWindow && !monitorWindow.isDestroyed()) {
-                monitorWindow.webContents.send('stream-frame', {
-                    deviceId: frameData.deviceId,
-                    data: frameData.data,
-                    mimeType: frameData.mimeType,
-                    size: frameData.size,
-                    captureTime: frameData.captureTime
-                });
+            // Buffer frame (latest wins per device)
+            frameBatch.set(frameData.deviceId, {
+                deviceId: frameData.deviceId,
+                data: frameData.data,
+                mimeType: frameData.mimeType,
+                size: frameData.size,
+                captureTime: frameData.captureTime
+            });
+
+            // Schedule flush if not already scheduled
+            if (!batchFlushTimer) {
+                batchFlushTimer = setInterval(() => {
+                    flushFrameBatch();
+                    if (frameBatch.size === 0 && !streamer.isRunning) {
+                        clearInterval(batchFlushTimer);
+                        batchFlushTimer = null;
+                    }
+                }, 500); // Flush every 500ms = 2 batch updates/sec
             }
         });
 
@@ -929,6 +922,17 @@ function ensureStreamer() {
                 });
             }
         });
+
+        // Cleanup on streamer stop
+        const originalStop = streamer.stopStreaming.bind(streamer);
+        streamer.stopStreaming = function() {
+            if (batchFlushTimer) {
+                clearInterval(batchFlushTimer);
+                batchFlushTimer = null;
+            }
+            frameBatch.clear();
+            return originalStop();
+        };
     }
     return streamer;
 }
@@ -1317,7 +1321,7 @@ async function cancelAllJobsOnQuit() {
     try {
         console.log('=== CANCEL ALL JOBS START ===');
 
-        const allJobs = db.getAllJobs();
+        const allJobs = await db.getAllJobs();
         const activeJobs = allJobs.filter(j => j.status === 'running' || j.status === 'pending');
 
         if (activeJobs.length === 0) {
@@ -1330,10 +1334,8 @@ async function cancelAllJobsOnQuit() {
         const allDeviceIds = new Set();
 
         for (const job of activeJobs) {
-            db.updateJobStatus(job.id, 'cancelled');
-
-            const stmt = db.db.prepare('UPDATE tasks SET status = ? WHERE job_id = ? AND status IN (?, ?)');
-            stmt.run('cancelled', job.id, 'pending', 'running');
+            await db.updateJobStatus(job.id, 'cancelled');
+            await db.cancelJobTasks(job.id);
 
             if (job.deviceIds && Array.isArray(job.deviceIds)) {
                 job.deviceIds.forEach(id => allDeviceIds.add(id));
@@ -1356,8 +1358,9 @@ async function cancelAllJobsOnQuit() {
 
 // APP LIFECYCLE
 app.whenReady().then(async () => {
-    db = new JobDatabase();
+    db = new AsyncJobDatabase();
     await db.init();
+    console.log('[DB] AsyncJobDatabase ready (worker thread)');
 
     loadDevices();
     
@@ -1426,8 +1429,9 @@ app.on('before-quit', async (event) => {
     await cancelAllJobsOnQuit();
 
     console.log('Verifying database file...');
-    if (fs.existsSync(db.dbPath)) {
-        const stats = fs.statSync(db.dbPath);
+    const dbFilePath = path.join(__dirname, 'jobs.db');
+    if (fs.existsSync(dbFilePath)) {
+        const stats = fs.statSync(dbFilePath);
         console.log(`Database file size: ${stats.size} bytes`);
     }
 
@@ -1440,7 +1444,7 @@ app.on('before-quit', async (event) => {
 
     if (db && !db.isClosed) {
         console.log('Closing database...');
-        db.close();
+        await db.close();
     }
 
     // Cleanup screen capture and streamer

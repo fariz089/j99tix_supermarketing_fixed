@@ -74,6 +74,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('stream-frame', (event, data) => callback(data));
     },
 
+    // FIX v2: Batched stream frame listener (efficient mode - one IPC call per flush)
+    onStreamFrameBatch: (callback) => {
+        ipcRenderer.on('stream-frame-batch', (event, data) => callback(data));
+    },
+
     // Device status change listener
     onDeviceStatusChange: (callback) => {
         ipcRenderer.on('device-status-change', (event, data) => callback(data));

@@ -46,7 +46,7 @@ class BoostLiveTask {
             const now = Date.now();
             if (!worker.isJobCancelledFn && db && (now - lastDbCancelCheck > DB_CANCEL_CHECK_INTERVAL)) {
                 lastDbCancelCheck = now;
-                const job = db.getJob(jobId);
+                const job = await db.getJob(jobId);
                 if (job && job.status === 'cancelled') {
                     await UIHelper.closeTikTok(worker);
                     await UIHelper.goHome(worker);
@@ -209,8 +209,8 @@ class BoostLiveTask {
                 if (commentIsDue) {
                     // ---- COMMENT HAS PRIORITY — skip all other actions ----
                     const commentResult = db.tryGetComment ?
-                        db.tryGetComment(jobId, worker.deviceId, deviceIndex, commentDelay) :
-                        { status: 'ok', comment: db.getAndUseComment ? db.getAndUseComment(jobId, worker.deviceId) : null };
+                        await db.tryGetComment(jobId, worker.deviceId, deviceIndex, commentDelay) :
+                        { status: 'ok', comment: db.getAndUseComment ? await db.getAndUseComment(jobId, worker.deviceId) : null };
 
                     if (commentResult.status === 'ok' && commentResult.comment) {
                         console.log(`[${worker.deviceId}] 💬 [PRIORITY] Commenting: "${commentResult.comment}" (like & share paused)`);
@@ -219,7 +219,7 @@ class BoostLiveTask {
 
                         if (success) {
                             stats.comments++;
-                            if (db.markDeviceCommented) db.markDeviceCommented(jobId, worker.deviceId);
+                            if (db.markDeviceCommented) await db.markDeviceCommented(jobId, worker.deviceId);
                             console.log(`[${worker.deviceId}] ✅ Comment posted`);
                         } else {
                             stats.commentsFailed++;

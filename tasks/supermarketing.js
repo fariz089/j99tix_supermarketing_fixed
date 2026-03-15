@@ -171,7 +171,7 @@ class SuperMarketingTask {
 
                     stats.cyclesCompleted++;
                     consecutiveErrors = 0; // Reset on success
-                    if (jobId && db) { try { db.incrementJobProgress(jobId, 1); } catch (e) { } }
+                    if (jobId && db) { try { await db.incrementJobProgress(jobId, 1); } catch (e) { } }
 
                     if (cycle < totalCycles - 1 && Math.random() < 0.3) {
                         try { await UIHelper.swipeFYP(worker); } catch (e) { }

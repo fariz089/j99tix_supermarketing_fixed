@@ -535,20 +535,15 @@ class DeviceWorker {
 
     /**
      * FIX: Fast in-memory cancel check — no DB query needed.
-     * Falls back to DB query only every 10 seconds if the fast check is not available.
+     * The isJobCancelledFn is always set by main.js on load.
      */
     isJobCancelled(jobId) {
         // Fast path: check in-memory set (O(1), no I/O)
         if (this.isJobCancelledFn) {
             return this.isJobCancelledFn(jobId);
         }
-        // Slow fallback: DB query (only if isJobCancelledFn not set)
-        try {
-            const job = this.db.getJob(jobId);
-            return job && job.status === 'cancelled';
-        } catch (e) {
-            return false;
-        }
+        // Fallback: assume not cancelled (DB is async now, can't check sync)
+        return false;
     }
 
     sleep(ms) {

@@ -210,7 +210,18 @@ async function reconnectAllDevices() {
  * Setup listeners for push-based streaming frames from main process
  */
 function setupStreamListeners() {
-    // Listen for individual frames pushed from ScrcpyStreamer
+    // FIX v2: Listen for BATCHED frames (new efficient mode)
+    // Main process now buffers frames and sends them in a single IPC call every 500ms
+    if (window.electronAPI.onStreamFrameBatch) {
+        window.electronAPI.onStreamFrameBatch((batchData) => {
+            // batchData is { deviceId: frameData, ... }
+            for (const [deviceId, frameData] of Object.entries(batchData)) {
+                handleStreamFrame(frameData);
+            }
+        });
+    }
+
+    // Legacy: Listen for individual frames (backward compat)
     if (window.electronAPI.onStreamFrame) {
         window.electronAPI.onStreamFrame((frameData) => {
             handleStreamFrame(frameData);
