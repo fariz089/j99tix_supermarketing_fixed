@@ -114,6 +114,11 @@ class ScrcpyStreamer extends EventEmitter {
             this._stopDeviceStream(deviceId);
         }
         this.deviceStreams.clear();
+        // FIX: bersihkan frame cache supaya frame base64 (bisa MB-an) di-release.
+        // Tanpa ini, frame terakhir tetap di memory walaupun streaming sudah stop.
+        this.frameCache.clear();
+        // Reset stats (jangan accumulate antar session)
+        this.stats._frameTimes = [];
     }
 
     /**

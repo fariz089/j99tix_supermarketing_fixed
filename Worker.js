@@ -255,15 +255,27 @@ class DeviceWorker {
             this.status = 'idle';
             this.currentTask = null;
             this.currentJobId = null;
+            this._resetTaskState();
 
             return { success: true, result };
         } catch (error) {
             this.status = 'idle';
             this.currentTask = null;
             this.currentJobId = null;
+            this._resetTaskState();
 
             return { success: false, error: error.message };
         }
+    }
+
+    /**
+     * Reset state per-task supaya tidak nempel antar task.
+     * BIARKAN _touchDevice, screenWidth, dst — itu device-level info yang valid.
+     * HAPUS context spesifik task seperti _liveContext.
+     */
+    _resetTaskState() {
+        this._liveContext = null;
+        // Buffer ad-hoc lain bisa ditambah di sini kalau muncul di task baru
     }
 
     async runTaskScript(task) {

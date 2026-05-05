@@ -205,6 +205,19 @@ class AsyncJobDatabase {
         return this._call('_refreshCountCache', jobId);
     }
 
+    // ── CLEANUP METHODS ──
+    async cleanupCompletedJob(jobId) {
+        return this._call('cleanupCompletedJob', jobId);
+    }
+
+    async walCheckpoint(mode = 'PASSIVE') {
+        return this._call('walCheckpoint', mode);
+    }
+
+    async releaseMemory() {
+        return this._call('releaseMemory');
+    }
+
     async close() {
         if (this.isClosed) return;
         this.isClosed = true;

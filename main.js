@@ -289,6 +289,66 @@ async function procesTaskResult(taskId, jobId, result, deviceId) {
     }
 }
 
+/**
+ * Post-job cleanup — dipanggil sekali setelah job selesai.
+ * Tujuannya: bebaskan RAM & cegah WAL bloat sehingga tidak perlu restart
+ * komputer di antara run.
+ *
+ * Yang dibersihkan:
+ *   1. cancelledJobIds Set entry untuk job ini
+ *   2. Worker state stale (_liveContext, _touchDevice tetap karena valid)
+ *   3. DB internal cache untuk job ini (_countCache)
+ *   4. WAL checkpoint TRUNCATE — shrink WAL file ke 0 byte
+ *   5. SQLite shrink_memory — release page cache
+ *   6. Force GC kalau --expose-gc dijalankan (best-effort)
+ */
+async function postJobCleanup(jobId) {
+    try {
+        // 1. Hapus dari Set in-memory yang terus tumbuh
+        cancelledJobIds.delete(jobId);
+
+        // 2. Reset worker per-job state (jangan reset display info — masih valid)
+        for (const [, worker] of workers.entries()) {
+            if (worker.currentJobId === jobId) {
+                worker.currentJobId = null;
+                worker.currentTask = null;
+            }
+            // Bersihkan context per-task yang nempel di worker
+            if (worker._liveContext) worker._liveContext = null;
+        }
+
+        // 3. Cleanup DB cache untuk job ini
+        if (db && !db.isClosed) {
+            try { await db.cleanupCompletedJob(jobId); } catch (e) { }
+
+            // 4. Checkpoint WAL — TRUNCATE supaya file shrink ke 0
+            // Ini penting: tanpa ini, WAL bisa tumbuh ratusan MB → SQLite lambat
+            try {
+                const r = await db.walCheckpoint('TRUNCATE');
+                if (r && r.success) {
+                    console.log(`[Cleanup] WAL checkpoint TRUNCATE done for ${jobId}`);
+                }
+            } catch (e) { }
+
+            // 5. Release SQLite page cache back to OS
+            try { await db.releaseMemory(); } catch (e) { }
+        }
+
+        // 6. Best-effort GC (hanya jalan kalau electron di-launch dengan --js-flags="--expose-gc")
+        if (global.gc) {
+            try { global.gc(); } catch (e) { }
+        }
+
+        // Log heap size untuk monitoring
+        const mem = process.memoryUsage();
+        const heapMB = Math.round(mem.heapUsed / 1024 / 1024);
+        const rssMB = Math.round(mem.rss / 1024 / 1024);
+        console.log(`[Cleanup] Job ${jobId} done | Heap: ${heapMB}MB | RSS: ${rssMB}MB`);
+    } catch (e) {
+        console.error(`[Cleanup] Error for ${jobId}:`, e.message);
+    }
+}
+
 async function processPendingUpdates() {
     if (db.isClosed) return;
 
@@ -311,6 +371,9 @@ async function processPendingUpdates() {
             if (counts.pending === 0 && counts.running === 0) {
                 await db.updateJobStatus(jobId, 'completed', { completedAt: Date.now() });
                 notifyJobUpdate(jobId, 'completed');
+                // FIX: post-completion cleanup — bersihkan cache & WAL supaya
+                // RAM tidak menumpuk antar job (jadi tidak perlu restart komputer)
+                await postJobCleanup(jobId);
             } else {
                 notifyJobUpdate(jobId, 'task_completed');
             }
@@ -337,6 +400,44 @@ function startWorkerLoop() {
     }
     scheduleNext();
     console.log('Worker loop started (1000ms async interval, DB on worker thread)');
+
+    // FIX: periodic maintenance loop — jalan setiap 5 menit untuk job yang
+    // jalan lama (misal supermarketing 30 menit). Tanpa ini, WAL bisa tumbuh
+    // jadi ratusan MB selama job berjalan dan bikin SQLite lambat.
+    startMaintenanceLoop();
+}
+
+let maintenanceInterval = null;
+function startMaintenanceLoop() {
+    if (maintenanceInterval) return;
+
+    const MAINTENANCE_INTERVAL_MS = 5 * 60 * 1000; // 5 menit
+
+    maintenanceInterval = setInterval(async () => {
+        try {
+            if (db && !db.isClosed) {
+                // PASSIVE checkpoint = aman dipanggil saat ada writer aktif,
+                // tidak akan block. Hanya truncate WAL kalau memungkinkan.
+                await db.walCheckpoint('PASSIVE');
+                await db.releaseMemory();
+            }
+            if (global.gc) { try { global.gc(); } catch (e) { } }
+
+            const mem = process.memoryUsage();
+            const rssMB = Math.round(mem.rss / 1024 / 1024);
+            const heapMB = Math.round(mem.heapUsed / 1024 / 1024);
+            console.log(`[Maintenance] Heap: ${heapMB}MB | RSS: ${rssMB}MB`);
+        } catch (e) {
+            console.error('[Maintenance] Error:', e.message);
+        }
+    }, MAINTENANCE_INTERVAL_MS);
+}
+
+function stopMaintenanceLoop() {
+    if (maintenanceInterval) {
+        clearInterval(maintenanceInterval);
+        maintenanceInterval = null;
+    }
 }
 
 /**
@@ -387,6 +488,8 @@ function stopWorkerLoop() {
     if (pendingDbWrites.size > 0) {
         processPendingUpdates();
     }
+
+    stopMaintenanceLoop();
 
     console.log('Worker loop stopped');
 }

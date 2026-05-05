@@ -31,9 +31,16 @@ function init() {
 
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
-    db.pragma('cache_size = -64000');
+    // FIX: kurangi cache_size dari 64MB → 16MB. DB ini kecil (<1MB),
+    // 64MB cache tidak terpakai dan hold memory percuma.
+    db.pragma('cache_size = -16000');
     db.pragma('temp_store = MEMORY');
-    db.pragma('mmap_size = 268435456');
+    // FIX: kurangi mmap_size dari 256MB → 64MB. Untuk DB <10MB,
+    // 256MB mmap = waste virtual memory + kadang bikin Windows lambat.
+    db.pragma('mmap_size = 67108864');
+    // FIX: auto-checkpoint setiap 1000 page (~4MB) supaya WAL tidak bloat.
+    // Default-nya 1000 juga, tapi kita pastikan eksplisit.
+    db.pragma('wal_autocheckpoint = 1000');
 
     initTables();
 
@@ -499,6 +506,46 @@ const methods = {
     _refreshCountCache(jobId) {
         _refreshCountCache(jobId);
         return _getCache(jobId);
+    },
+
+    // ── CLEANUP: panggil setelah job selesai supaya cache & WAL tidak bloat ──
+    cleanupCompletedJob(jobId) {
+        try {
+            // Hapus cache count untuk job ini (tidak akan diakses lagi)
+            _countCache.delete(jobId);
+        } catch (e) { }
+        // Tidak hapus dari DB — biar history tetap ada untuk UI
+        return true;
+    },
+
+    /**
+     * Manual WAL checkpoint — call setelah job besar selesai.
+     * TRUNCATE mode: WAL file di-shrink ke 0 byte setelah checkpoint sukses.
+     * Tanpa ini, WAL bisa tumbuh GB-an dan bikin SQLite + Windows lambat.
+     */
+    walCheckpoint(mode = 'PASSIVE') {
+        try {
+            const validModes = ['PASSIVE', 'FULL', 'RESTART', 'TRUNCATE'];
+            const m = validModes.includes(mode) ? mode : 'PASSIVE';
+            const result = db.pragma(`wal_checkpoint(${m})`);
+            return { success: true, mode: m, result };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
+    },
+
+    /**
+     * Memory cleanup: trim better-sqlite3 internal caches & SQLite memory.
+     * Panggil setelah job besar selesai.
+     */
+    releaseMemory() {
+        try {
+            // Shrink page cache (release pages back to OS)
+            db.pragma('shrink_memory');
+            return { success: true };
+        } catch (e) {
+            return { success: false, error: e.message };
+        }
     },
 
     // ── CLOSE ──
