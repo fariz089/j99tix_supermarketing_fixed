@@ -644,7 +644,7 @@ class BoostLiveTask {
                 const lower = focusInfo.toLowerCase();
 
                 // Kalau bukan di TikTok sama sekali → pasti keluar
-                if (!lower.includes('musically') && !lower.includes('tiktok')) {
+                if (!lower.includes('musically') && !lower.includes('tiktok') && !lower.includes('trill')) {
                     return false;
                 }
 
@@ -725,14 +725,14 @@ class BoostLiveTask {
                 /Beri komentar\.\.\./i,
                 /Tulis sesuatu\.\.\./i,
                 // Live UI element IDs
-                /com\.zhiliaoapp\.musically:id\/[^"]*live[^"]*input/i,
-                /com\.zhiliaoapp\.musically:id\/[^"]*gift_button/i,
-                /com\.zhiliaoapp\.musically:id\/[^"]*live_gift/i,
-                /com\.zhiliaoapp\.musically:id\/[^"]*gift_panel/i,
-                /com\.zhiliaoapp\.musically:id\/[^"]*viewer/i,
-                /com\.zhiliaoapp\.musically:id\/[^"]*audience/i,
-                /com\.zhiliaoapp\.musically:id\/[^"]*live_room/i,
-                /com\.zhiliaoapp\.musically:id\/[^"]*chat_message/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*live[^"]*input/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*gift_button/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*live_gift/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*gift_panel/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*viewer/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*audience/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*live_room/i,
+                /com\.ss\.android\.ugc\.trill:id\/[^"]*chat_message/i,
                 // Live action buttons
                 /content-desc="Send a gift"/i,
                 /content-desc="Kirim hadiah"/i,
@@ -749,7 +749,7 @@ class BoostLiveTask {
             if (/\bLIVE\b/.test(xml) && /viewer|penonton|watching|menonton/i.test(xml)) {
                 // Tapi pastikan bukan LIVE icon di FYP (yang muncul di video FYP biasa)
                 // FYP punya pattern "LIVE" tapi disertai komentar count tinggi & no gift button
-                if (!/com\.zhiliaoapp\.musically:id\/[^"]*home_tab/i.test(xml)) {
+                if (!/com\.ss\.android\.ugc\.trill:id\/[^"]*home_tab/i.test(xml)) {
                     return true;
                 }
             }

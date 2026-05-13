@@ -789,7 +789,7 @@
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                             <button class="panel-btn warning" onclick="adbAction('shell wm density reset')">Reset DPI</button>
                             <button class="panel-btn warning" onclick="adbAction('shell wm size reset')">Reset Resolution</button>
-                            <button class="panel-btn danger" onclick="adbAction('shell pm clear com.zhiliaoapp.musically')">Clear TikTok Data</button>
+                            <button class="panel-btn danger" onclick="adbAction('shell pm clear com.ss.android.ugc.trill')">Clear TikTok Data</button>
                             <button class="panel-btn secondary" onclick="adbAction('shell pm list packages -3')">List Apps</button>
                             <button class="panel-btn primary" onclick="batchInstallAPK()">📦 Install APK</button>
                             <button class="panel-btn secondary" onclick="adbAction('shell dumpsys battery')">Battery Info</button>
@@ -865,15 +865,15 @@
                                         <span class="cmd-label">Reset Resolution</span>
                                         <span class="cmd-detail">adb shell wm size reset</span>
                                     </div>
-                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell am force-stop com.zhiliaoapp.musically')">
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell am force-stop com.ss.android.ugc.trill')">
                                         <span class="cmd-num">11</span>
                                         <span class="cmd-label">Close TikTok</span>
-                                        <span class="cmd-detail">adb shell am force-stop com.zhiliaoapp.musically</span>
+                                        <span class="cmd-detail">adb shell am force-stop com.ss.android.ugc.trill</span>
                                     </div>
-                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell monkey -p com.zhiliaoapp.musically 1')">
+                                    <div class="adb-cmd-item" onclick="runConsoleCmd('shell monkey -p com.ss.android.ugc.trill 1')">
                                         <span class="cmd-num">12</span>
                                         <span class="cmd-label">Open TikTok</span>
-                                        <span class="cmd-detail">adb shell monkey -p com.zhiliaoapp.musically 1</span>
+                                        <span class="cmd-detail">adb shell monkey -p com.ss.android.ugc.trill 1</span>
                                     </div>
                                     <div class="adb-cmd-item" onclick="runCompoundCmd(['shell settings put system screen_brightness_mode 0','shell settings put system screen_brightness 10'])">
                                         <span class="cmd-num">13</span>
@@ -1007,8 +1007,8 @@
         <div class="modal-box">
             <h3>⚡ Batch Command — <span id="modal-device-count">0</span> devices</h3>
             <div class="modal-actions">
-                <button class="modal-btn" onclick="batchCommand('shell am force-stop com.zhiliaoapp.musically')" style="background:linear-gradient(135deg,#ef4444,#dc2626);">❌ Close TikTok</button>
-                <button class="modal-btn" onclick="batchCommand('shell monkey -p com.zhiliaoapp.musically 1')" style="background:linear-gradient(135deg,#10b981,#059669);">📱 Open TikTok</button>
+                <button class="modal-btn" onclick="batchCommand('shell am force-stop com.ss.android.ugc.trill')" style="background:linear-gradient(135deg,#ef4444,#dc2626);">❌ Close TikTok</button>
+                <button class="modal-btn" onclick="batchCommand('shell monkey -p com.ss.android.ugc.trill 1')" style="background:linear-gradient(135deg,#10b981,#059669);">📱 Open TikTok</button>
                 <button class="modal-btn" onclick="batchCommand('shell reboot')" style="background:linear-gradient(135deg,#f59e0b,#d97706);">🔄 Reboot</button>
                 <button class="modal-btn" onclick="batchCommand('shell input keyevent KEYCODE_HOME')" style="background:linear-gradient(135deg,#6366f1,#4f46e5);">🏠 Home</button>
                 <button class="modal-btn" onclick="batchCommand('shell input keyevent KEYCODE_BACK')" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">◀️ Back</button>

@@ -106,7 +106,7 @@ class UIHelper {
             }
 
             // Try resource-id
-            for (const rid of ['com.zhiliaoapp.musically:id/comment_button', 'com.ss.android.ugc.trill:id/comment_button']) {
+            for (const rid of ['com.ss.android.ugc.trill:id/comment_button']) {
                 const r = this.findByResourceId(xml, rid);
                 if (r.success) {
                     await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
@@ -584,12 +584,12 @@ class UIHelper {
     // ================================================
 
     static async openTikTok(worker) {
-        await worker.execAdb('shell monkey -p com.zhiliaoapp.musically 1');
+        await worker.execAdb('shell monkey -p com.ss.android.ugc.trill 1');
         await worker.sleep(4000);
     }
 
     static async closeTikTok(worker) {
-        try { await worker.execAdb('shell am force-stop com.zhiliaoapp.musically'); await worker.sleep(500); } catch (e) {}
+        try { await worker.execAdb('shell am force-stop com.ss.android.ugc.trill'); await worker.sleep(500); } catch (e) {}
     }
 
     static async goHome(worker) {
@@ -598,11 +598,13 @@ class UIHelper {
 
     static async openUrl(worker, url) {
         try {
-            await worker.execAdb(`shell am start -a android.intent.action.VIEW -p com.zhiliaoapp.musically -d "${url}"`);
+            await worker.execAdb(`shell am start -a android.intent.action.VIEW -p com.ss.android.ugc.trill -d "${url}"`);
         } catch (e) {
             await worker.execAdb(`shell am start -a android.intent.action.VIEW -d "${url}"`);
         }
-        await worker.sleep(1500);
+        // FIX: was 1500ms — too short, video belum sempet load + play sebelum watch timer mulai
+        // 4000ms kasih waktu deep link diproses + video load dari server + mulai playback
+        await worker.sleep(4000);
     }
 
     static async goBack(worker) {

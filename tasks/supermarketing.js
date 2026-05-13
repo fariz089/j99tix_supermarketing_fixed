@@ -93,16 +93,7 @@ class SuperMarketingTask {
             }
             if (worker.status === 'paused') await worker.waitForResume();
 
-            // FYP scroll (uses swipe — no UI dump)
-            const actualScrolls = worker.randomInt(0, scrollCount);
-            for (let i = 0; i < actualScrolls; i++) {
-                if (worker.status === 'paused') await worker.waitForResume();
-                try { await UIHelper.swipeFYP(worker); } catch (e) { }
-                await worker.sleep(worker.randomInt(scrollDelayMin, scrollDelayMax) * 1000);
-                if (likeEnabled && Math.random() < 0.1) {
-                    try { await this.doubleTapLikeCenter(worker); stats.likes++; } catch (e) { }
-                }
-            }
+            console.log(`[${worker.deviceId}] 📜 Scroll config: 0-${scrollCount}x per cycle, delay ${scrollDelayMin}-${scrollDelayMax}s`);
 
             // ============================================================
             // MAIN LOOP — each cycle wrapped in try-catch
@@ -122,6 +113,27 @@ class SuperMarketingTask {
                     for (let ui = 0; ui < shuffledUrls.length; ui++) {
                         checkCancelled();
                         if (worker.status === 'paused') await worker.waitForResume();
+
+                        // ===== SCROLL FYP per-cycle (simulasi browsing natural) =====
+                        // Random 0..scrollCount swipes BEFORE opening each target URL
+                        if (scrollCount > 0) {
+                            const cycleScrolls = worker.randomInt(0, scrollCount);
+                            if (cycleScrolls > 0) {
+                                console.log(`[${worker.deviceId}] 📜 Scroll FYP ${cycleScrolls}x before opening URL`);
+                                for (let s = 0; s < cycleScrolls; s++) {
+                                    checkCancelled();
+                                    if (worker.status === 'paused') await worker.waitForResume();
+                                    try { await UIHelper.swipeFYP(worker); } catch (e) { }
+                                    // Sleep delay per scroll
+                                    await worker.sleep(worker.randomInt(scrollDelayMin, scrollDelayMax) * 1000);
+                                    // Optional like saat FYP browsing (kalau enabled, peluang kecil)
+                                    if (likeEnabled && Math.random() * 100 < likeChance) {
+                                        try { await this.doubleTapLikeCenter(worker); stats.likes++; } catch (e) { }
+                                        await worker.sleep(800);
+                                    }
+                                }
+                            }
+                        }
 
                         if (cycle > 0 || ui > 0) {
                             await worker.sleep(worker.randomInt(1, openUrlDelay) * 1000);
@@ -173,10 +185,8 @@ class SuperMarketingTask {
                     consecutiveErrors = 0; // Reset on success
                     if (jobId && db) { try { await db.incrementJobProgress(jobId, 1); } catch (e) { } }
 
-                    if (cycle < totalCycles - 1 && Math.random() < 0.3) {
-                        try { await UIHelper.swipeFYP(worker); } catch (e) { }
-                        await worker.sleep(worker.randomInt(1000, 2000));
-                    }
+                    // Note: scroll FYP sekarang dilakukan di awal tiap URL (di dalam loop ui)
+                    // jadi tidak perlu hardcoded swipe di akhir cycle lagi.
 
                 } catch (cycleError) {
                     // If it's a cancel, re-throw immediately
