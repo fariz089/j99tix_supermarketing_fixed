@@ -9,6 +9,8 @@ class JobGenerator {
                 return this.generateBoostLiveTasks(jobId, config, deviceIds);
             case 'masscomment':
                 return this.generateMassCommentTasks(jobId, config, deviceIds);
+            case 'profile_boost':
+                return this.generateProfileBoostTasks(jobId, config, deviceIds);
             default:
                 throw new Error(`Unknown job type: ${type}`);
         }
@@ -94,6 +96,38 @@ class JobGenerator {
         console.log(`   ❤️ Like: ${config.likeEnabled !== false ? 'ON' : 'OFF'} (delay: ${config.likeDelay || 0}s)`);
         console.log(`   💬 Comment: ${config.commentEnabled !== false ? 'ON' : 'OFF'} (delay: ${config.commentDelay || 0}s)`);
         console.log(`   🔄 Share: ${config.shareEnabled !== false ? 'ON' : 'OFF'} (delay: ${config.shareDelay || 0}s)`);
+        return tasks;
+    }
+
+    /**
+     * Profile Boost: 1 task per device, each device loops totalCycles times.
+     * Per cycle: open profile (search or deep link) → tap video at startIndex →
+     * watch → swipe up to next → repeat until stopIndex.
+     */
+    static generateProfileBoostTasks(jobId, config, deviceIds) {
+        const tasks = [];
+        const targetCycles = config.totalCycles || 1;
+
+        deviceIds.forEach((deviceId, index) => {
+            tasks.push({
+                id: `${jobId}_task_${index}`,
+                jobId,
+                type: 'profile_boost',
+                config: {
+                    ...config,
+                    totalCycles: targetCycles,
+                    jobId
+                },
+                assignedDevice: deviceId
+            });
+        });
+
+        const scrollCount = config.scrollCount || 0;
+        const videosPerCycle = 1 + scrollCount;
+        const totalViews = deviceIds.length * targetCycles * videosPerCycle;
+        console.log(`✅ Generated ${tasks.length} profile boost tasks`);
+        console.log(`   📊 ${deviceIds.length} devices × ${targetCycles} cycles × ${videosPerCycle} videos (1+${scrollCount} swipes) = ${totalViews} total views`);
+        console.log(`   👤 Target: @${config.username}`);
         return tasks;
     }
 

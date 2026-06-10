@@ -108,6 +108,7 @@ function renderJobs(jobs) {
 function formatJobType(type) {
     const types = {
         'super_marketing': '📊 Super Marketing',
+        'profile_boost': '👤 Profile Boost',
         'warmup': '🔥 Account Warmup',
         'boost_live': '🎥 Boost Live',
         'mass_comment': '💬 Mass Comment',

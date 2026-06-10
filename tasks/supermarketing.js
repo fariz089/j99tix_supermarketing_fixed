@@ -31,7 +31,14 @@ class SuperMarketingTask {
         } = config;
 
         const db = worker.db;
-        let stats = { cyclesCompleted: 0, totalUrlsWatched: 0, totalWatchTime: 0, likes: 0, errors: 0 };
+        
+        let stats = { 
+            cyclesCompleted: 0, 
+            totalUrlsWatched: 0, 
+            totalWatchTime: 0, 
+            likes: 0, 
+            errors: 0
+        };
         const tier = this.getDeviceTier(worker);
 
         const checkCancelled = () => {

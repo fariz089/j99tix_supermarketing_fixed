@@ -34,6 +34,7 @@
                 <button class="tab" data-tab="warmup">🔥 Warmup</button>
                 <button class="tab" data-tab="boostlive">🎥 Boost Live</button>
                 <button class="tab" data-tab="masscomment">💬 Mass Comment</button>
+                <button class="tab" data-tab="profileboost">👤 Profile Boost</button>
             </div>
 
             <!-- Super Marketing Tab -->
@@ -471,6 +472,150 @@ So creative! ✨"></textarea>
                 </div>
 
                 <button onclick="createMassCommentJob()">🚀 Create Mass Comment Job</button>
+            </div>
+
+            <!-- Profile Boost Tab -->
+            <div class="tab-content" id="profileboost">
+                <div class="form-group">
+                    <label>👤 TikTok Username (without @)</label>
+                    <input type="text" id="pb_username" placeholder="juragan99bos">
+                    <small style="color: #888; font-size: 12px;">💡 Tanpa tanda @. Contoh: juragan99bos</small>
+                </div>
+
+                <div class="form-group">
+                    <label>📜 Jumlah Scroll (swipe ke video berikutnya)</label>
+                    <input type="number" id="pb_scroll_count" value="5" min="0" max="50">
+                    <small style="color: #888; font-size: 12px;">💡 Total video per cycle = 1 (video pertama) + jumlah scroll. Contoh: 5 scroll = tonton 6 video per cycle.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>🔄 Target Cycles</label>
+                    <input type="number" id="pb_cycles" value="10" min="1">
+                    <small style="color: #888; font-size: 12px;">💡 Flow (search → tap video pertama → watch → swipe) akan diulang sebanyak ini.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>⏱️ Watch Duration Per Video (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="pb_watch_min" value="5" min="1">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="pb_watch_max" value="30" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>⏱️ Delay Between Swipes (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="pb_swipe_delay_min" value="1" min="0">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="pb_swipe_delay_max" value="3" min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>⏸️ Idle Delay Before Start (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Min</label>
+                            <input type="number" id="pb_idle_min" value="2" min="0">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Max</label>
+                            <input type="number" id="pb_idle_max" value="5" min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>⚡ Performance Options (Cycle 2+)</label>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="pb_skip_reopen" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #e4e9f7;">Skip Close/Open TikTok antar cycle</span>
+                    </div>
+                    <small style="color: #888; font-size: 12px; display: block; margin-bottom: 12px;">💡 ON (default): cycle 2+ cuma tekan back ke home (hemat ~4-7 detik/cycle). OFF: close + reopen TikTok tiap cycle (lebih "fresh" tapi lambat).</small>
+
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="pb_fast_mode" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #e4e9f7;">Fast Mode (pangkas sleep di cycle 2+)</span>
+                    </div>
+                    <small style="color: #888; font-size: 12px;">💡 ON (default): cycle 2+ sleep dipangkas ~50% karena cached tap pasti kena (hemat ~10 detik/cycle). OFF: sleep penuh.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>❤️ Like Settings</label>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="pb_like_enabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #e4e9f7;">Enable Random Likes</span>
+                    </div>
+                    <div id="pb_like_settings">
+                        <div>
+                            <label style="font-size: 12px; color: #64748b;">Double Tap % (Like)</label>
+                            <input type="number" id="pb_like_chance" value="5" min="0" max="100">
+                        </div>
+                    </div>
+                    <small style="color: #888; font-size: 12px;">💡 Double tap di tengah layar untuk like video.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>📱 Select Devices (<span id="pb_count">0</span> selected)</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <button onclick="selectAllDevices('pb')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            ✅ Select All
+                        </button>
+                        <button onclick="deselectAllDevices('pb')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);">
+                            ❌ Clear All
+                        </button>
+                        <button onclick="toggleDeviceView('pb')"
+                            style="padding: 8px 16px; font-size: 12px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); margin-left: auto;">
+                            👁️ Toggle View
+                        </button>
+                    </div>
+                    <div id="pb_devices" class="device-selector-v2"></div>
+                </div>
+
+                <!-- Task Flow Preview -->
+                <div
+                    style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 14px; color: #a5b4fc; margin-bottom: 8px;">📋 Task Flow (per cycle):</div>
+                    <div style="font-size: 13px; color: #e4e9f7; line-height: 1.8;">
+                        1. 🧹 Close TikTok → ⏸️ Idle <span id="pb_preview_idle">2-5s</span> → 📱 Open TikTok<br>
+                        2. 🏠 Land on Home/FYP<br>
+                        3. 🔍 Tap Search icon (cycle 1: dump UI · cycle 2+: cached coords)<br>
+                        4. ⌨️ Type username + press Enter<br>
+                        5. 🎞️ Tap video pertama (cycle 1: dump UI · cycle 2+: cached coords)<br>
+                        6. 👁️ Watch <span id="pb_preview_watch">5-30s</span><br>
+                        7. ⬆️ Swipe up to next video (delay: <span id="pb_preview_swipe_delay">1-3s</span>)<br>
+                        8. 🔁 Repeat swipe <span id="pb_preview_scroll">5</span>x (total <span id="pb_preview_total">6</span> video per cycle)
+                    </div>
+                    <div style="font-size: 12px; color: #fbbf24; margin-top: 10px;">
+                        💡 Cycle 1 = dump UI untuk mapping koordinat per kategori device. Cycle 2+ pakai cache → lebih cepat & ringan. Cache reset otomatis tiap job baru.<br>
+                        🔄 Device low-tier (X8) auto stagger 15-25s di awal — biar device high-tier populate cache dulu, lalu X8 pakai cross-category cache (koordinat dari device lain, di-skala ke resolusi X8).<br>
+                        ⚡ Skip Reopen (ON): cycle 2+ tekan back ke home (hemat ~4-7s/cycle). Fast Mode (ON): cycle 2+ sleep dipangkas ~60% (hemat ~10s/cycle).
+                    </div>
+                </div>
+
+                <button onclick="createProfileBoostJob()">🚀 Create Profile Boost Job</button>
             </div>
 
         </div>

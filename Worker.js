@@ -3,6 +3,7 @@ const SuperMarketingTask = require('./tasks/supermarketing');
 const WarmupTask = require('./tasks/warmup');
 const BoostLiveTask = require('./tasks/boostlive');
 const MassCommentTask = require('./tasks/masscomment');
+const ProfileBoostTask = require('./tasks/profileboost');
 
 class DeviceWorker {
     constructor(deviceId, db, deviceInfo) {
@@ -291,6 +292,8 @@ class DeviceWorker {
                 return await BoostLiveTask.execute(this, taskConfig);
             case 'masscomment':
                 return await MassCommentTask.execute(this, taskConfig);
+            case 'profile_boost':
+                return await ProfileBoostTask.execute(this, taskConfig);
             default:
                 throw new Error(`Unknown task type: ${type}`);
         }

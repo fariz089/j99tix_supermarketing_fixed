@@ -360,7 +360,7 @@ async function processPendingUpdates() {
             const counts = await db.getTaskCounts(jobId);
             const job = await db.getJob(jobId);
             
-            if (job && job.type === 'super_marketing') {
+            if (job && (job.type === 'super_marketing' || job.type === 'profile_boost')) {
                 if (counts.failed > 0) {
                     await db.updateJobFailedCount(jobId, counts.failed);
                 }
@@ -595,6 +595,9 @@ ipcMain.handle('create-job', async (event, data) => {
         if (type === 'super_marketing') {
             const targetCycles = config.numWatching || 100;
             initialTotal = deviceIds.length * targetCycles;
+        } else if (type === 'profile_boost') {
+            const targetCycles = config.totalCycles || 1;
+            initialTotal = deviceIds.length * targetCycles;
         }
 
         await db.createJob({
@@ -638,7 +641,7 @@ ipcMain.handle('get-jobs', async () => {
     for (const job of allJobs) {
         const counts = await db.getTaskCounts(job.id);
         let completedCount = counts.completed;
-        if (job.type === 'super_marketing') {
+        if (job.type === 'super_marketing' || job.type === 'profile_boost') {
             completedCount = job.completed_count || 0;
         }
         jobs.push({

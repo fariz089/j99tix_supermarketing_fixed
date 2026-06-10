@@ -20,6 +20,11 @@ class MassCommentTask {
         console.log(`[${worker.deviceId}] ========================================`);
 
         try {
+            // SCREEN WAKE LOCK
+            await UIHelper.wakeAndUnlock(worker);
+            await UIHelper.setStayOn(worker, true);
+            console.log(`[${worker.deviceId}] 🔆 Screen stay-on enabled (USB)`);
+
             // Stagger delay
             if (deviceStartDelay > 0) {
                 console.log(`[${worker.deviceId}] ⏱️ Stagger delay: ${deviceStartDelay}s`);
@@ -109,6 +114,11 @@ class MassCommentTask {
             console.error(`[${worker.deviceId}] ❌ Failed: ${error.message}`);
             try { await UIHelper.closeTikTok(worker); await UIHelper.goHome(worker); } catch (e) {}
             throw error;
+        } finally {
+            try {
+                await UIHelper.setStayOn(worker, false);
+                console.log(`[${worker.deviceId}] 🌙 Screen stay-on disabled`);
+            } catch (e) {}
         }
     }
 }

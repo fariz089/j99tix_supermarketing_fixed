@@ -554,6 +554,31 @@ class UIHelper {
         await worker.execAdb(`shell input swipe ${x} ${sy} ${x} ${ey} ${speed || worker.randomInt(200, 400)}`);
     }
 
+    /**
+     * Swipe to next video — variant for Profile Boost flow.
+     *
+     * Profile Boost opens videos from the search-results page, which often
+     * shows a CapCut creator tag near the bottom (~y=75-80%). Tapping or
+     * starting a swipe there opens Play Store / CapCut app. So we keep
+     * the entire gesture comfortably above the CapCut tag zone.
+     *
+     * No pre-tap (focus tap risked hitting the CapCut tag too).
+     * Swipe runs from y=65% → y=20%, x at 45% (slightly left of center,
+     * away from the right-side like/comment/share rail), duration ~700ms
+     * (slow enough to register as a deliberate fling).
+     */
+    static async swipeProfileBoostNext(worker) {
+        const W = worker.screenWidth;
+        const H = worker.screenHeight;
+
+        try {
+            const x = Math.round(W * 0.45);
+            const sy = Math.round(H * 0.65);   // safely above the CapCut tag area
+            const ey = Math.round(H * 0.20);
+            await worker.execAdb(`shell input swipe ${x} ${sy} ${x} ${ey} 700`);
+        } catch (e) {}
+    }
+
     static async tapScreen(worker) {
         const x = worker.randomInt(Math.round(worker.screenWidth * 0.30), Math.round(worker.screenWidth * 0.70));
         const y = worker.randomInt(Math.round(worker.screenHeight * 0.30), Math.round(worker.screenHeight * 0.50));
@@ -584,6 +609,7 @@ class UIHelper {
     // ================================================
 
     static async openTikTok(worker) {
+        // OPTIMIZED: Use simple monkey like LAMA version (4 seconds, not 20+)
         await worker.execAdb('shell monkey -p com.ss.android.ugc.trill 1');
         await worker.sleep(4000);
     }
@@ -610,6 +636,114 @@ class UIHelper {
     static async goBack(worker) {
         await worker.execAdb('shell input keyevent 4');
         await worker.sleep(500);
+    }
+
+    // ================================================
+    // SCREEN WAKE / STAY-ON (mainly for Samsung screen-timeout issue)
+    // ================================================
+
+    /**
+     * Check if device screen is currently ON.
+     * Check if device screen is currently ON.
+     * Tries multiple detection methods (dumpsys power → dumpsys display → input_method).
+     * Samsung One UI sometimes returns different formats, so we use multiple checks.
+     * Returns true if screen is on, false if confirmed off.
+     */
+    static async isScreenOn(worker) {
+        try {
+            // Method 1: dumpsys power | grep mWakefulness (most reliable on stock Android)
+            const out1 = await worker.execAdb('shell "dumpsys power 2>/dev/null | grep -E \'mWakefulness=|Display Power|mScreenOn\' | head -5"');
+            if (/mWakefulness=Awake/i.test(out1) || /Display Power: state=ON/i.test(out1) || /mScreenOn=true/i.test(out1)) {
+                return true;
+            }
+            if (/mWakefulness=(Asleep|Dozing)/i.test(out1) || /Display Power: state=(OFF|DOZE)/i.test(out1) || /mScreenOn=false/i.test(out1)) {
+                return false;
+            }
+            // Method 2 (Samsung One UI fallback): dumpsys display | grep mScreenState
+            const out2 = await worker.execAdb('shell "dumpsys display 2>/dev/null | grep -E \'mScreenState|mState=\' | head -3"');
+            if (/mScreenState=ON|mState=ON/i.test(out2)) return true;
+            if (/mScreenState=OFF|mState=OFF/i.test(out2)) return false;
+
+            return true; // unknown → assume on (don't trigger wake unnecessarily)
+        } catch (e) {
+            return true;
+        }
+    }
+
+    /**
+     * Wake the screen if off. Uses KEYCODE_WAKEUP (224).
+     * If WAKEUP doesn't work, fall back to POWER (26) which toggles.
+     */
+    static async wakeScreen(worker) {
+        try {
+            const on = await this.isScreenOn(worker);
+            if (on) return false; // already on
+            // KEYCODE_WAKEUP — only turns on, doesn't toggle off (safer than POWER)
+            await worker.execAdb('shell input keyevent 224');
+            await worker.sleep(500);
+            // Verify it worked; if not, try POWER (toggles)
+            const onAfter = await this.isScreenOn(worker);
+            if (!onAfter) {
+                await worker.execAdb('shell input keyevent 26'); // KEYCODE_POWER
+                await worker.sleep(500);
+            }
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Swipe up to dismiss simple lock screen (no PIN/password).
+     */
+    static async swipeUpUnlock(worker) {
+        try {
+            const W = worker.screenWidth;
+            const H = worker.screenHeight;
+            const x = Math.round(W * 0.5);
+            const y1 = Math.round(H * 0.85);
+            const y2 = Math.round(H * 0.20);
+            await worker.execAdb(`shell input swipe ${x} ${y1} ${x} ${y2} 300`);
+            await worker.sleep(800);
+        } catch (e) {}
+    }
+
+    /**
+     * Ensure screen is on + unlock. Always performs the swipe even if screen
+     * was already on — cheap (~1s) and ensures any sleeping lockscreen overlay
+     * is dismissed. Safe to call repeatedly (mid-task too).
+     */
+    static async wakeAndUnlock(worker) {
+        try {
+            // Always send WAKEUP — it's idempotent (no effect if already awake)
+            await worker.execAdb('shell input keyevent 224');
+            await worker.sleep(400);
+            // Always swipe up to dismiss any lockscreen overlay that might be present
+            await this.swipeUpUnlock(worker);
+        } catch (e) {}
+        return true;
+    }
+
+    /**
+     * Set screen stay-on. Uses combined mode for max compatibility:
+     *   true  → "usb,ac,wireless" (keeps screen on while plugged in ANY way,
+     *                              including pure WiFi-ADB without USB cable)
+     *   false → "false" (revert to OS default timeout)
+     */
+    static async setStayOn(worker, enabled) {
+        try {
+            // Combined mode: keep screen on regardless of charge source.
+            // On Android 9+: bitmask 7 = USB(1)|AC(2)|WIRELESS(4) = 7
+            // On older: comma-separated "usb,ac,wireless"
+            const arg = enabled === true ? 'true' :
+                        enabled === false ? 'false' :
+                        String(enabled);
+            // Try the modern bitmask first (works on Android 9+)
+            await worker.execAdb(`shell svc power stayon ${arg}`);
+            return true;
+        } catch (e) {
+            return false;
+        }
     }
 
     // ================================================

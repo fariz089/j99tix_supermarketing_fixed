@@ -1,7 +1,7 @@
 let devices = [];
-let selectedDevices = { sm: new Set(), wu: new Set(), bl: new Set(), mc: new Set() };
+let selectedDevices = { sm: new Set(), wu: new Set(), bl: new Set(), mc: new Set(), pb: new Set() };
 // Track view mode per tab: 'compact' (default) or 'detailed'
-let deviceViewMode = { sm: 'compact', wu: 'compact', bl: 'compact', mc: 'compact' };
+let deviceViewMode = { sm: 'compact', wu: 'compact', bl: 'compact', mc: 'compact', pb: 'compact' };
 
 window.electronAPI.onAppReady(() => {
     console.log('App ready, hiding loading overlay');
@@ -71,7 +71,7 @@ function toggleDeviceView(type) {
 }
 
 function renderDeviceSelectors() {
-    ['sm', 'wu', 'bl', 'mc'].forEach(type => {
+    ['sm', 'wu', 'bl', 'mc', 'pb'].forEach(type => {
         const container = document.getElementById(`${type}_devices`);
         const countEl = document.getElementById(`${type}_count`);
 
@@ -566,6 +566,130 @@ async function createMassCommentJob() {
         showNotification(`Failed to create job: ${error.message}`, 'error');
     }
 }
+
+
+
+// ============================================================
+// PROFILE BOOST
+// ============================================================
+
+// Live preview updater for Profile Boost
+function updatePbPreview() {
+    const idleMin = document.getElementById('pb_idle_min')?.value || 2;
+    const idleMax = document.getElementById('pb_idle_max')?.value || 5;
+    const watchMin = document.getElementById('pb_watch_min')?.value || 5;
+    const watchMax = document.getElementById('pb_watch_max')?.value || 30;
+    const swipeMin = document.getElementById('pb_swipe_delay_min')?.value || 1;
+    const swipeMax = document.getElementById('pb_swipe_delay_max')?.value || 3;
+    const scrollCount = parseInt(document.getElementById('pb_scroll_count')?.value || 5);
+    const totalVideos = 1 + scrollCount;
+
+    const setText = (id, txt) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = txt;
+    };
+    setText('pb_preview_idle', `${idleMin}-${idleMax}s`);
+    setText('pb_preview_watch', `${watchMin}-${watchMax}s`);
+    setText('pb_preview_swipe_delay', `${swipeMin}-${swipeMax}s`);
+    setText('pb_preview_scroll', scrollCount);
+    setText('pb_preview_total', totalVideos);
+}
+
+// Attach preview listeners + like toggle behavior
+['pb_idle_min', 'pb_idle_max', 'pb_watch_min', 'pb_watch_max',
+    'pb_swipe_delay_min', 'pb_swipe_delay_max',
+    'pb_scroll_count'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updatePbPreview);
+    });
+
+(() => {
+    const likeToggle = document.getElementById('pb_like_enabled');
+    const likeSettings = document.getElementById('pb_like_settings');
+    if (likeToggle && likeSettings) {
+        likeToggle.addEventListener('change', () => {
+            likeSettings.style.opacity = likeToggle.checked ? '1' : '0.5';
+            likeSettings.querySelectorAll('input').forEach(input => {
+                input.disabled = !likeToggle.checked;
+            });
+        });
+    }
+})();
+
+async function createProfileBoostJob() {
+    const username = (document.getElementById('pb_username').value || '').trim().replace(/^@/, '');
+    if (!username) return alert('Please enter a TikTok username!');
+
+    const deviceIds = Array.from(selectedDevices.pb);
+    if (deviceIds.length === 0) return alert('Please select at least one device!');
+
+    const scrollCount = parseInt(document.getElementById('pb_scroll_count').value);
+    if (isNaN(scrollCount) || scrollCount < 0) {
+        return alert('Invalid scroll count! Must be 0 or more.');
+    }
+
+    const watchMin = parseInt(document.getElementById('pb_watch_min').value);
+    const watchMax = parseInt(document.getElementById('pb_watch_max').value);
+    if (watchMin > watchMax) return alert('Watch duration Min cannot be greater than Max!');
+
+    const swipeMin = parseInt(document.getElementById('pb_swipe_delay_min').value);
+    const swipeMax = parseInt(document.getElementById('pb_swipe_delay_max').value);
+    if (swipeMin > swipeMax) return alert('Swipe delay Min cannot be greater than Max!');
+
+    const idleMin = parseInt(document.getElementById('pb_idle_min').value);
+    const idleMax = parseInt(document.getElementById('pb_idle_max').value);
+    if (idleMin > idleMax) return alert('Idle delay Min cannot be greater than Max!');
+
+    const likeEnabled = document.getElementById('pb_like_enabled').checked;
+    const likeChance = likeEnabled ? parseInt(document.getElementById('pb_like_chance').value) : 0;
+
+    const config = {
+        username,
+        scrollCount,
+        totalCycles: parseInt(document.getElementById('pb_cycles').value),
+        durationMin: watchMin,
+        durationMax: watchMax,
+        swipeDelayMin: swipeMin,
+        swipeDelayMax: swipeMax,
+        idleDelayMin: idleMin,
+        idleDelayMax: idleMax,
+        likeEnabled,
+        likeChance,
+        skipReopenBetweenCycles: document.getElementById('pb_skip_reopen').checked,
+        fastModeOnCache: document.getElementById('pb_fast_mode').checked
+    };
+
+    showLoading('Creating Profile Boost job...');
+    try {
+        const result = await window.electronAPI.createJob({
+            type: 'profile_boost',
+            config,
+            deviceIds
+        });
+        hideLoading();
+        if (!result.success) {
+            showNotification(`Failed: ${result.error}`, 'error');
+            return;
+        }
+        const videosPerCycle = 1 + scrollCount;
+        const totalViews = deviceIds.length * config.totalCycles * videosPerCycle;
+        showNotification(
+            `<strong>Profile Boost Job Created!</strong><br><br>` +
+            `Target: @${username}<br>` +
+            `Videos per cycle: ${videosPerCycle} (1 + ${scrollCount} scrolls)<br>` +
+            `Cycles: ${config.totalCycles}<br>` +
+            `Devices: ${deviceIds.length}<br>` +
+            `Total Views: ${totalViews}`,
+            'success'
+        );
+    } catch (error) {
+        hideLoading();
+        showNotification(`Failed to create job: ${error.message}`, 'error');
+    }
+}
+
+// Init preview once on load
+setTimeout(updatePbPreview, 0);
 
 
 

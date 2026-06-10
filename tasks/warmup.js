@@ -23,15 +23,32 @@ class WarmupTask {
         };
 
         try {
+            // SCREEN WAKE LOCK
+            await UIHelper.wakeAndUnlock(worker);
+            await UIHelper.setStayOn(worker, true);
+            console.log(`[${worker.deviceId}] 🔆 Screen stay-on enabled (USB)`);
+
             console.log(`[${worker.deviceId}] 🔥 Warmup | ${duration}s, screen ${worker.screenWidth}x${worker.screenHeight}`);
             console.log(`[${worker.deviceId}]    View: ${viewChance}%, Like: ${likeChance}%, Comment: ${commentChance}%, Share: ${shareChance}%`);
 
             await UIHelper.closeTikTok(worker);
             await UIHelper.openTikTok(worker);
 
+            let lastWakeCheck = Date.now();
+            const WAKE_CHECK_INTERVAL_MS = 30000; // re-apply stayon + wake every 30s
+
             while (Date.now() < endTime) {
                 checkCancelled();
                 if (worker.status === 'paused') await worker.waitForResume();
+
+                // Periodic wake check
+                if (Date.now() - lastWakeCheck > WAKE_CHECK_INTERVAL_MS) {
+                    try {
+                        await UIHelper.setStayOn(worker, true);
+                        await UIHelper.wakeAndUnlock(worker);
+                    } catch (e) {}
+                    lastWakeCheck = Date.now();
+                }
 
                 // Scroll to next video
                 const roll = Math.random() * 100;
@@ -84,6 +101,11 @@ class WarmupTask {
             console.error(`[${worker.deviceId}] ❌ Warmup failed:`, error.message);
             try { await UIHelper.closeTikTok(worker); } catch (e) { }
             throw error;
+        } finally {
+            try {
+                await UIHelper.setStayOn(worker, false);
+                console.log(`[${worker.deviceId}] 🌙 Screen stay-on disabled`);
+            } catch (e) {}
         }
     }
 }

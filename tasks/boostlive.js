@@ -95,6 +95,11 @@ class BoostLiveTask {
         };
 
         try {
+            // SCREEN WAKE LOCK
+            await UIHelper.wakeAndUnlock(worker);
+            await UIHelper.setStayOn(worker, true);
+            console.log(`[${worker.deviceId}] 🔆 Screen stay-on enabled (USB)`);
+
             const tier = UIHelper.getDeviceTier(worker);
             console.log(`[${worker.deviceId}] 🎥 Boost Live | ${duration}s, Device #${deviceIndex + 1}, screen ${W}x${H}, tier: ${tier}`);
             console.log(`[${worker.deviceId}]    Like: ${likeEnabled ? `ON (${likeInterval}s ±${Math.round(likeJitter * 100)}%)` : 'OFF'}, Comment: ${commentEnabled ? `ON (${commentDelay}s ±${Math.round(commentJitter * 100)}%)` : 'OFF'}, Share: ${shareEnabled ? '1x' : 'OFF'}`);
@@ -225,15 +230,26 @@ class BoostLiveTask {
             let loopCount = 0;
             let lastCaptchaCheckTime = 0;
             let lastLiveHealthCheckTime = 0;
+            let lastWakeCheck = 0;
             let consecutiveOutsideLive = 0;     // counter berapa kali berturut-turut detect "keluar live"
             const CAPTCHA_CHECK_INTERVAL = 12;  // check captcha setiap 12s (sebelumnya 30s, terlalu lambat — TikTok kick ~15-20s)
             const LIVE_HEALTH_CHECK_INTERVAL = 8; // check "masih di live?" setiap 8s, INDEPENDEN dari captcha
+            const WAKE_CHECK_INTERVAL_MS = 30000; // re-apply stayon + wake every 30s
 
             while (Date.now() < endTime) {
                 if (await checkCancelled()) throw new Error('Job cancelled by user');
                 if (worker.status === 'paused') { await worker.waitForResume(); continue; }
 
                 const now = Date.now();
+
+                // Periodic wake check
+                if (now - lastWakeCheck > WAKE_CHECK_INTERVAL_MS) {
+                    try {
+                        await UIHelper.setStayOn(worker, true);
+                        await UIHelper.wakeAndUnlock(worker);
+                    } catch (e) {}
+                    lastWakeCheck = now;
+                }
 
                 // ---- LIVE HEALTH CHECK (independen dari captcha) ----
                 // Cek setiap 8 detik: "apakah aku masih di live?"
@@ -449,6 +465,11 @@ class BoostLiveTask {
             console.error(`[${worker.deviceId}] ❌ Stopped:`, error.message);
             try { await UIHelper.closeTikTok(worker); await UIHelper.goHome(worker); } catch (e) { }
             throw error;
+        } finally {
+            try {
+                await UIHelper.setStayOn(worker, false);
+                console.log(`[${worker.deviceId}] 🌙 Screen stay-on disabled`);
+            } catch (e) {}
         }
     }
 
