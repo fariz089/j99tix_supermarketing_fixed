@@ -609,9 +609,22 @@ class UIHelper {
     // ================================================
 
     static async openTikTok(worker) {
-        // OPTIMIZED: Use simple monkey like LAMA version (4 seconds, not 20+)
-        await worker.execAdb('shell monkey -p com.ss.android.ugc.trill 1');
-        await worker.sleep(4000);
+        // FIX: Replace unreliable 'monkey' with 'am start' (always available, more reliable)
+        try {
+            // Method 1: Direct activity launch (more reliable than monkey)
+            await worker.execAdb('shell am start -n com.ss.android.ugc.trill/com.ss.android.ugc.trill.MainActivity');
+            await worker.sleep(4000);
+        } catch (e1) {
+            try {
+                // Method 2: Fallback - generic intent launch
+                console.log(`[${worker.deviceId}] ⚠️ Method 1 failed, trying fallback...`);
+                await worker.execAdb('shell am start -a android.intent.action.MAIN -n com.ss.android.ugc.trill/.MainActivity');
+                await worker.sleep(4000);
+            } catch (e2) {
+                console.log(`[${worker.deviceId}] ❌ Failed to open TikTok: ${e2.message}`);
+                throw new Error(`Cannot open TikTok on ${worker.deviceId}`);
+            }
+        }
     }
 
     static async closeTikTok(worker) {
