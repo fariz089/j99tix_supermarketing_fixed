@@ -652,6 +652,74 @@ class UIHelper {
     }
 
     // ================================================
+    // CLICK "WATCH ONLY" (popup saat buka link share)
+    //
+    // Saat buka deep-link share, TikTok kadang munculin popup:
+    //   [ Watch and follow ]   ← tombol merah (JANGAN dipencet, itu follow)
+    //     Watch only           ← teks ini yang kita mau (cuma nonton)
+    //
+    // Popup ini TIDAK selalu muncul. Strategi:
+    //   1. Dump UI → cari teks "Watch only" / "Tonton saja" → tap (paling akurat,
+    //      otomatis nyesuain semua resolusi: X8 800x1280, SM 1080x2280, PDEM10 1440x3168)
+    //   2. Kalau dump gagal tapi popup mungkin ada → tap koordinat rasio
+    //      tombol "Watch only" (di bawah tombol merah, tengah layar ~Y 0.64)
+    //
+    // Return: { found: true/false }  — found=true kalau popup terdeteksi & di-tap
+    // ================================================
+    static async clickWatchOnly(worker, useFallbackCoord = true) {
+        const W = worker.screenWidth;
+        const H = worker.screenHeight;
+
+        const xml = await this.dumpUI(worker);
+        if (xml) {
+            // Strategy 1: cari teks "Watch only" (EN + ID + variasi)
+            for (const p of ['Watch only', 'watch only', 'Tonton saja', 'tonton saja',
+                              'Hanya tonton', 'Hanya menonton', 'Lihat saja']) {
+                let r = this.findByText(xml, p);
+                if (!r.success) r = this.findByContentDesc(xml, p);
+                if (r.success) {
+                    await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
+                    console.log(`[${worker.deviceId}] 👀 Watch only (text "${p}") at (${r.x}, ${r.y})`);
+                    await worker.sleep(1500);
+                    return { found: true };
+                }
+            }
+
+            // Strategy 2: deteksi tombol merah "Watch and follow" → Watch only ada
+            // tepat di bawahnya. Hitung posisinya relatif ke tombol merah.
+            for (const p of ['Watch and follow', 'watch and follow', 'Tonton dan ikuti',
+                             'Tonton & ikuti', 'Ikuti dan tonton']) {
+                let r = this.findByText(xml, p);
+                if (!r.success) r = this.findByContentDesc(xml, p);
+                if (r.success) {
+                    // "Watch only" kira-kira 1 baris di bawah tombol merah (~6% tinggi layar)
+                    const woX = r.x;
+                    const woY = Math.round(r.y + H * 0.058);
+                    await worker.execAdb(`shell input tap ${woX} ${woY}`);
+                    console.log(`[${worker.deviceId}] 👀 Watch only (below "${p}") at (${woX}, ${woY})`);
+                    await worker.sleep(1500);
+                    return { found: true };
+                }
+            }
+        }
+
+        // Strategy 3 (opsional): fallback koordinat rasio.
+        // Dari screenshot popup: tombol "Watch only" ada di tengah-horizontal,
+        // sedikit di bawah tengah layar. Diukur: X ≈ 0.50, Y ≈ 0.64
+        // Ini PROPORSIONAL → otomatis benar di semua 4 resolusi device.
+        if (useFallbackCoord) {
+            const x = Math.round(W * 0.50);
+            const y = Math.round(H * 0.64);
+            await worker.execAdb(`shell input tap ${x} ${y}`);
+            console.log(`[${worker.deviceId}] 👀 Watch only (fallback coord) at (${x}, ${y})`);
+            await worker.sleep(1200);
+            return { found: false }; // tidak yakin popup ada — ini cuma tap di posisi
+        }
+
+        return { found: false };
+    }
+
+    // ================================================
     // SCREEN WAKE / STAY-ON (mainly for Samsung screen-timeout issue)
     // ================================================
 

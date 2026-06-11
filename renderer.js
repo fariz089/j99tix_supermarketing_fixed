@@ -326,6 +326,10 @@ async function createSuperMarketingJob() {
     const likeEnabled = document.getElementById('sm_like_enabled').checked;
     const likeChance = likeEnabled ? parseInt(document.getElementById('sm_like_chance').value) : 0;
 
+    // Get Watch-only setting (default ON if checkbox tidak ada)
+    const woEl = document.getElementById('sm_watchonly_enabled');
+    const watchOnlyEnabled = woEl ? woEl.checked : true;
+
     const config = {
         urls: urls,
         numWatching: parseInt(document.getElementById('sm_target').value),
@@ -338,7 +342,8 @@ async function createSuperMarketingJob() {
         scrollDelayMax: parseInt(document.getElementById('sm_scroll_delay_max').value),
         openUrlDelay: parseInt(document.getElementById('sm_open_delay').value),
         likeEnabled: likeEnabled,
-        likeChance: likeChance
+        likeChance: likeChance,
+        watchOnlyEnabled: watchOnlyEnabled
     };
 
     // Validation

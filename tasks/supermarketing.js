@@ -27,6 +27,7 @@ class SuperMarketingTask {
             totalCycles = 1,
             likeEnabled = true,
             likeChance = 5,
+            watchOnlyEnabled = true,
             jobId
         } = config;
 
@@ -158,6 +159,20 @@ class SuperMarketingTask {
                             }
                         }
                         if (!opened) { console.log(`[${worker.deviceId}] ❌ URL failed after 3 retries, skip`); continue; }
+
+                        // ===== WATCH ONLY popup handler =====
+                        // Saat buka link share, TikTok kadang munculin popup
+                        // "Watch and follow / Watch only". Kita HARUS pencet "Watch only"
+                        // (cuma nonton, bukan follow). Popup ini TIDAK selalu muncul.
+                        //
+                        // clickWatchOnly() bakal:
+                        //   - kalau popup ADA  → deteksi & tap tombol "Watch only" (akurat,
+                        //     auto-nyesuain semua resolusi via UI dump)
+                        //   - kalau popup TIDAK ADA → tetap tap di koordinat tombol "Watch only"
+                        //     yang fungsinya jadi tap layar biasa → tetap work (sesuai request)
+                        if (watchOnlyEnabled) {
+                            try { await UIHelper.clickWatchOnly(worker, true); } catch (e) { }
+                        }
 
                         // Watch video
                         const dur = worker.randomInt(durationMin, durationMax);
