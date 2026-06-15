@@ -330,6 +330,10 @@ async function createSuperMarketingJob() {
     const woEl = document.getElementById('sm_watchonly_enabled');
     const watchOnlyEnabled = woEl ? woEl.checked : true;
 
+    // Get Reopen-TikTok setting (default OFF if checkbox tidak ada)
+    const reEl = document.getElementById('sm_reopen_enabled');
+    const reopenEnabled = reEl ? reEl.checked : false;
+
     const config = {
         urls: urls,
         numWatching: parseInt(document.getElementById('sm_target').value),
@@ -343,7 +347,8 @@ async function createSuperMarketingJob() {
         openUrlDelay: parseInt(document.getElementById('sm_open_delay').value),
         likeEnabled: likeEnabled,
         likeChance: likeChance,
-        watchOnlyEnabled: watchOnlyEnabled
+        watchOnlyEnabled: watchOnlyEnabled,
+        reopenEnabled: reopenEnabled
     };
 
     // Validation
@@ -711,5 +716,46 @@ async function openMonitorWindow() {
     await window.electronAPI.openMonitorWindow();
 }
 
+// ============================================================
+// Target App Selector (TikTok Biasa / Lite)
+// ============================================================
+async function loadTargetApps() {
+    try {
+        const { apps, active } = await window.electronAPI.getTargetApps();
+        const sel = document.getElementById('targetAppSelect');
+        if (!sel) return;
+        sel.innerHTML = '';
+        apps.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            opt.textContent = `${a.label}  (${a.package})`;
+            if (a.id === active) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        const status = document.getElementById('targetAppStatus');
+        const cur = apps.find(a => a.id === active);
+        if (status && cur) status.textContent = `✓ Aktif: ${cur.label}`;
+    } catch (e) {
+        console.error('loadTargetApps failed:', e);
+    }
+}
+
+async function onTargetAppChange() {
+    const sel = document.getElementById('targetAppSelect');
+    const status = document.getElementById('targetAppStatus');
+    if (!sel) return;
+    const res = await window.electronAPI.setTargetApp(sel.value);
+    if (status) {
+        if (res && res.success) {
+            status.style.color = '#10b981';
+            status.textContent = `✓ Aktif: ${res.label}`;
+        } else {
+            status.style.color = '#ef4444';
+            status.textContent = `✗ Gagal: ${res ? res.error : 'unknown'}`;
+        }
+    }
+}
+
 // Init
+loadTargetApps();
 loadDevices();

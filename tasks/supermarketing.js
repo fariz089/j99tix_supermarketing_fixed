@@ -28,6 +28,7 @@ class SuperMarketingTask {
             likeEnabled = true,
             likeChance = 5,
             watchOnlyEnabled = true,
+            reopenEnabled = false,
             jobId
         } = config;
 
@@ -74,6 +75,7 @@ class SuperMarketingTask {
         try {
             console.log(`[${worker.deviceId}] 🎯 Super Marketing | ${totalCycles} cycles, ${urls.length} URLs, screen ${worker.screenWidth}x${worker.screenHeight}, tier: ${tier}`);
             console.log(`[${worker.deviceId}] ❤️ Like: ${likeEnabled ? `${likeChance}% (double-tap only)` : 'OFF'}`);
+            console.log(`[${worker.deviceId}] 🔁 Reopen TikTok before next URL: ${reopenEnabled ? 'ON' : 'OFF'}`);
 
             // Random stagger 0-10s so 100 devices don't all hit ADB at the same time
             // With 100 devices, spreading over 10s = ~10 devices/sec (safe for ADB server)
@@ -144,6 +146,25 @@ class SuperMarketingTask {
                         }
 
                         if (cycle > 0 || ui > 0) {
+                            // ===== REOPEN TIKTOK before next URL (jika diaktifkan) =====
+                            // Tutup TikTok dulu lalu buka lagi sebelum lanjut ke URL berikutnya,
+                            // supaya tiap target dibuka dari kondisi app yang fresh.
+                            if (reopenEnabled) {
+                                console.log(`[${worker.deviceId}] 🔁 Reopen TikTok before next URL...`);
+                                try { await UIHelper.closeTikTok(worker); } catch (e) { }
+                                await worker.sleep(1500);
+                                try { await UIHelper.goHome(worker); } catch (e) { }
+                                await worker.sleep(1000);
+                                // Open dengan retry biar aman
+                                try {
+                                    await UIHelper.openTikTok(worker);
+                                } catch (e) {
+                                    await worker.sleep(2000);
+                                    try { await UIHelper.openTikTok(worker); } catch (e2) { }
+                                }
+                                if (worker.status === 'paused') await worker.waitForResume();
+                            }
+
                             await worker.sleep(worker.randomInt(1, openUrlDelay) * 1000);
                         }
 

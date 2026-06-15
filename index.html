@@ -25,6 +25,22 @@
             </button>
         </div>
 
+        <!-- Target App Selector (TikTok Biasa / Lite) -->
+        <div class="section" style="margin-bottom: 24px;">
+            <h2>🎯 Target Aplikasi</h2>
+            <p style="color: #94a3b8; font-size: 13px; margin: 4px 0 12px;">
+                Pilih aplikasi yang akan dikontrol sebelum membuat / menjalankan job.
+                Pilihan ini tersimpan otomatis dan berlaku untuk semua job.
+            </p>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <select id="targetAppSelect" onchange="onTargetAppChange()"
+                    style="flex: 1; padding: 10px; border-radius: 8px; background: #1e293b; color: #f1f5f9; border: 1px solid #334155; font-size: 14px;">
+                    <!-- diisi oleh renderer.js -->
+                </select>
+                <span id="targetAppStatus" style="font-size: 13px; color: #10b981; min-width: 160px;"></span>
+            </div>
+        </div>
+
         <!-- Create Job Section -->
         <div class="section">
             <h2>➕ Create New Job</h2>
@@ -134,6 +150,20 @@ https://www.tiktok.com/@user/video/111222333" style="resize: vertical;"></textar
                         💡 Kalau popup "Watch and follow / Watch only" muncul → otomatis pilih "Watch only"
                         (deteksi via UI dump, adaptif semua resolusi). Kalau popup tidak muncul, tap di posisi
                         tombol tsb tetap berfungsi sebagai tap layar biasa.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>🔁 Reopen TikTok (open & close)</label>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="sm_reopen_enabled">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="color: #e4e9f7;">Tutup & buka ulang TikTok sebelum lanjut ke URL berikutnya</span>
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                        💡 Kalau aktif: sebelum membuka setiap URL berikutnya, TikTok akan ditutup dulu
+                        lalu dibuka kembali (fresh state). URL pertama tetap dibuka seperti biasa.
                     </div>
                 </div>
                 <div class="form-group">

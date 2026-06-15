@@ -283,6 +283,14 @@ class DeviceWorker {
         const { type, config } = task;
         const taskConfig = { ...config, jobId: task.job_id };
 
+        // Resolusi package TikTok yang benar-benar terpasang di device ini
+        // (sekali per task). Mengisi this._resolvedPackage untuk dipakai
+        // openTikTok/openUrl/closeTikTok via AppConfig.pkgFor(worker).
+        try {
+            const AppConfig = require('./app-config');
+            await AppConfig.resolveInstalledPackage(this);
+        } catch (e) { /* non-fatal */ }
+
         switch (type) {
             case 'super_marketing':
                 return await SuperMarketingTask.execute(this, taskConfig);
@@ -567,6 +575,53 @@ class DeviceWorker {
 
     randomInt(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    /**
+     * Pastikan layar menyala & tidak terkunci sebelum mengirim input.
+     * Tanpa ini, device yang masuk sleep (layar hitam) akan mengabaikan
+     * semua tap/swipe/am-start → app tampak "tidak terbuka".
+     *
+     * Strategi:
+     *   1. Cek status layar via dumpsys power / display.
+     *   2. Kalau mati → kirim KEYCODE_WAKEUP (224) — lebih aman dari POWER
+     *      (POWER bisa malah mematikan kalau layar ternyata sudah nyala).
+     *   3. Swipe up untuk dismiss lockscreen (kalau tidak ada PIN).
+     *   4. wm dismiss-keyguard sebagai bonus (butuh device tanpa secure lock).
+     */
+    async wakeAndUnlock() {
+        try {
+            // 1. Deteksi apakah layar nyala
+            let screenOn = true;
+            try {
+                const out = await this.execAdb('shell "dumpsys power | grep -E \'mWakefulness=|Display Power\' | head -2"');
+                const low = (out || '').toLowerCase();
+                if (low.includes('wakefulness=asleep') ||
+                    low.includes('wakefulness=dozing') ||
+                    low.includes('state=off')) {
+                    screenOn = false;
+                }
+            } catch (e) { /* asumsikan perlu wake */ screenOn = false; }
+
+            if (!screenOn) {
+                // 2. Bangunkan layar (WAKEUP tidak akan mematikan kalau sudah nyala)
+                await this.execAdb('shell input keyevent 224'); // KEYCODE_WAKEUP
+                await this.sleep(600);
+                // 3. Swipe up dismiss lockscreen (proporsional ke resolusi)
+                const x = Math.round(this.screenWidth * 0.5);
+                const y1 = Math.round(this.screenHeight * 0.8);
+                const y2 = Math.round(this.screenHeight * 0.25);
+                await this.execAdb(`shell input swipe ${x} ${y1} ${x} ${y2} 200`);
+                await this.sleep(400);
+                // 4. Coba dismiss keyguard (no-op kalau ada secure lock)
+                try { await this.execAdb('shell wm dismiss-keyguard'); } catch (e) {}
+                await this.sleep(400);
+            }
+            return true;
+        } catch (e) {
+            console.log(`[${this.deviceId}] ⚠️ wakeAndUnlock error: ${e.message}`);
+            return false;
+        }
     }
 }
 

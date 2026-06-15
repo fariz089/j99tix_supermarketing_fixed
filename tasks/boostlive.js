@@ -1,4 +1,5 @@
 const UIHelper = require('./UIHelper');
+const AppConfig = require('../app-config');
 
 class BoostLiveTask {
 
@@ -665,7 +666,9 @@ class BoostLiveTask {
                 const lower = focusInfo.toLowerCase();
 
                 // Kalau bukan di TikTok sama sekali → pasti keluar
-                if (!lower.includes('musically') && !lower.includes('tiktok') && !lower.includes('trill')) {
+                // (cek 'aweme' juga supaya TikTok Lite = com.ss.android.ugc.aweme.lite ikut terdeteksi)
+                if (!lower.includes('musically') && !lower.includes('tiktok') &&
+                    !lower.includes('trill') && !lower.includes('aweme')) {
                     return false;
                 }
 
@@ -745,15 +748,15 @@ class BoostLiveTask {
                 /Katakan sesuatu\.\.\./i,
                 /Beri komentar\.\.\./i,
                 /Tulis sesuatu\.\.\./i,
-                // Live UI element IDs
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*live[^"]*input/i,
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*gift_button/i,
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*live_gift/i,
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*gift_panel/i,
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*viewer/i,
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*audience/i,
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*live_room/i,
-                /com\.ss\.android\.ugc\.trill:id\/[^"]*chat_message/i,
+                // Live UI element IDs (prefix mengikuti app aktif: trill / aweme.lite)
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*live[^"]*input`, 'i'),
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*gift_button`, 'i'),
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*live_gift`, 'i'),
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*gift_panel`, 'i'),
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*viewer`, 'i'),
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*audience`, 'i'),
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*live_room`, 'i'),
+                new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*chat_message`, 'i'),
                 // Live action buttons
                 /content-desc="Send a gift"/i,
                 /content-desc="Kirim hadiah"/i,
@@ -770,7 +773,7 @@ class BoostLiveTask {
             if (/\bLIVE\b/.test(xml) && /viewer|penonton|watching|menonton/i.test(xml)) {
                 // Tapi pastikan bukan LIVE icon di FYP (yang muncul di video FYP biasa)
                 // FYP punya pattern "LIVE" tapi disertai komentar count tinggi & no gift button
-                if (!/com\.ss\.android\.ugc\.trill:id\/[^"]*home_tab/i.test(xml)) {
+                if (!new RegExp(`${AppConfig.resIdPattern()}:id/[^"]*home_tab`, 'i').test(xml)) {
                     return true;
                 }
             }

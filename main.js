@@ -4,6 +4,7 @@ const fs = require('fs');
 const { exec, execSync } = require('child_process');
 const AsyncJobDatabase = require('./database-async');
 const DeviceWorker = require('./Worker');
+const AppConfig = require('./app-config');
 const JobGenerator = require('./JobGenerator');
 
 // Scrcpy path
@@ -549,6 +550,22 @@ function notifyWorkerUpdate(deviceId, event, task = null, error = null) {
 }
 
 // IPC HANDLERS
+// ============================================================
+// TARGET APP SELECTION (TikTok Biasa / Lite)
+// ============================================================
+ipcMain.handle('get-target-apps', () => {
+    return { apps: AppConfig.listApps(), active: AppConfig.getActiveApp().id };
+});
+
+ipcMain.handle('set-target-app', (event, appId) => {
+    try {
+        const active = AppConfig.setTargetApp(appId);
+        return { success: true, active: active.id, label: active.label, package: active.package };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 ipcMain.handle('get-devices', () => {
     return { success: true, devices };
 });
@@ -684,7 +701,7 @@ ipcMain.handle('cancel-job', async (event, jobId) => {
 
         if (job && job.deviceIds && job.deviceIds.length > 0) {
             console.log(`[Cancel Job] Closing TikTok on ${job.deviceIds.length} devices...`);
-            await execAdbOnDevices(job.deviceIds, 'shell am force-stop com.ss.android.ugc.trill');
+            await execAdbOnDevices(job.deviceIds, `shell am force-stop ${AppConfig.pkg()}`);
             console.log(`[Cancel Job] TikTok closed on all job devices`);
         }
 
@@ -727,7 +744,7 @@ ipcMain.handle('open-tiktok-bulk', async (event, deviceIds) => {
             deviceIds.map(async (deviceId) => {
                 try {
                     await new Promise((resolve, reject) => {
-                        exec(`"${ADB_PATH}" -s ${deviceId} shell monkey -p com.ss.android.ugc.trill 1`,
+                        exec(`"${ADB_PATH}" -s ${deviceId} shell monkey -p ${AppConfig.pkg()} -c android.intent.category.LAUNCHER 1`,
                             { timeout: 8000, windowsHide: true },
                             (error, stdout) => {
                                 if (error) reject(error);
@@ -764,7 +781,7 @@ ipcMain.handle('close-tiktok-bulk', async (event, deviceIds) => {
             deviceIds.map(async (deviceId) => {
                 try {
                     await new Promise((resolve, reject) => {
-                        exec(`"${ADB_PATH}" -s ${deviceId} shell am force-stop com.ss.android.ugc.trill`,
+                        exec(`"${ADB_PATH}" -s ${deviceId} shell am force-stop ${AppConfig.pkg()}`,
                             { timeout: 5000, windowsHide: true },
                             (error, stdout) => {
                                 if (error) reject(error);
@@ -827,7 +844,7 @@ ipcMain.handle('cancel-all-jobs', async () => {
         const deviceArray = Array.from(allDeviceIds);
         if (deviceArray.length > 0) {
             console.log(`[Cancel All] Closing TikTok on ${deviceArray.length} devices...`);
-            await execAdbOnDevices(deviceArray, 'shell am force-stop com.ss.android.ugc.trill');
+            await execAdbOnDevices(deviceArray, `shell am force-stop ${AppConfig.pkg()}`);
             console.log(`[Cancel All] TikTok closed on all devices`);
         }
 
@@ -1453,7 +1470,7 @@ async function cancelAllJobsOnQuit() {
         const deviceArray = Array.from(allDeviceIds);
         if (deviceArray.length > 0) {
             console.log(`Closing TikTok on ${deviceArray.length} devices...`);
-            await execAdbOnDevices(deviceArray, 'shell am force-stop com.ss.android.ugc.trill');
+            await execAdbOnDevices(deviceArray, `shell am force-stop ${AppConfig.pkg()}`);
         }
 
         console.log('=== CANCEL ALL JOBS COMPLETE ===');

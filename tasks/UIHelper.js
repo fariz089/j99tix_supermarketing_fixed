@@ -10,6 +10,8 @@
  * NO dependencies (no tesseract, no sharp, no opencv).
  * Just ADB + uiautomator.
  */
+const AppConfig = require('../app-config');
+
 class UIHelper {
 
     // ================================================
@@ -105,8 +107,9 @@ class UIHelper {
                 }
             }
 
-            // Try resource-id
-            for (const rid of ['com.ss.android.ugc.trill:id/comment_button']) {
+            // Try resource-id (prefix mengikuti app aktif: trill / aweme.lite)
+            const _cbPrefixes = AppConfig.getActiveApp().resIdPrefixes;
+            for (const rid of _cbPrefixes.map(p => `${p}:id/comment_button`)) {
                 const r = this.findByResourceId(xml, rid);
                 if (r.success) {
                     await worker.execAdb(`shell input tap ${r.x} ${r.y}`);
@@ -609,26 +612,56 @@ class UIHelper {
     // ================================================
 
     static async openTikTok(worker) {
-        // FIX: Replace unreliable 'monkey' with 'am start' (always available, more reliable)
+        // Package diambil dari app-config (Biasa / Lite).
+        const pkg = AppConfig.pkgFor(worker);
+        // Activity eksplisit hanya valid kalau package terpasang = package default
+        // di config. Kalau resolver menemukan varian lain, activity bisa beda →
+        // pakai null supaya hanya andalkan launcher intent.
+        const mainActivity = (pkg === AppConfig.getActiveApp().package)
+            ? AppConfig.mainActivity()
+            : null;
+
+        // Kalau resolver TIDAK menemukan package terpasang, jangan buang waktu
+        // retry — langsung beri pesan jelas. (worker._packageInstalled di-set
+        // oleh AppConfig.resolveInstalledPackage di awal task.)
+        if (worker._packageInstalled === false) {
+            const activeLabel = AppConfig.getActiveApp().label;
+            throw new Error(
+                `${activeLabel} tidak terpasang di ${worker.deviceId}. ` +
+                `Install dulu, ATAU ganti Target Aplikasi ke varian yang terpasang. ` +
+                `Jalankan detect-tiktok-package.bat untuk lihat package yang ada.`);
+        }
+
+        // PENTING: bangunkan layar dulu. Device yang sleep akan abaikan am start.
+        if (typeof worker.wakeAndUnlock === 'function') {
+            try { await worker.wakeAndUnlock(); } catch (e) {}
+        }
+
+        // Method 1: launcher intent via monkey — TIDAK butuh nama activity yang
+        // tepat, jadi aman untuk Lite (nama activity Lite bisa beda antar versi).
         try {
-            // Method 1: Direct activity launch (more reliable than monkey)
-            await worker.execAdb('shell am start -n com.ss.android.ugc.trill/com.ss.android.ugc.trill.MainActivity');
+            await worker.execAdb(`shell monkey -p ${pkg} -c android.intent.category.LAUNCHER 1`);
             await worker.sleep(4000);
+            return;
         } catch (e1) {
+            console.log(`[${worker.deviceId}] ⚠️ monkey launch failed, trying am start...`);
+        }
+
+        // Method 2: am start dengan activity eksplisit (kalau diketahui)
+        if (mainActivity) {
             try {
-                // Method 2: Fallback - generic intent launch
-                console.log(`[${worker.deviceId}] ⚠️ Method 1 failed, trying fallback...`);
-                await worker.execAdb('shell am start -a android.intent.action.MAIN -n com.ss.android.ugc.trill/.MainActivity');
+                await worker.execAdb(`shell am start -n ${pkg}/${mainActivity}`);
                 await worker.sleep(4000);
+                return;
             } catch (e2) {
                 console.log(`[${worker.deviceId}] ❌ Failed to open TikTok: ${e2.message}`);
-                throw new Error(`Cannot open TikTok on ${worker.deviceId}`);
             }
         }
+        throw new Error(`Cannot open TikTok (${pkg}) on ${worker.deviceId}`);
     }
 
     static async closeTikTok(worker) {
-        try { await worker.execAdb('shell am force-stop com.ss.android.ugc.trill'); await worker.sleep(500); } catch (e) {}
+        try { await worker.execAdb(`shell am force-stop ${AppConfig.pkgFor(worker)}`); await worker.sleep(500); } catch (e) {}
     }
 
     static async goHome(worker) {
@@ -636,14 +669,50 @@ class UIHelper {
     }
 
     static async openUrl(worker, url) {
-        try {
-            await worker.execAdb(`shell am start -a android.intent.action.VIEW -p com.ss.android.ugc.trill -d "${url}"`);
-        } catch (e) {
-            await worker.execAdb(`shell am start -a android.intent.action.VIEW -d "${url}"`);
+        const pkg = AppConfig.pkgFor(worker);
+
+        // Pastikan layar nyala dulu
+        if (typeof worker.wakeAndUnlock === 'function') {
+            try { await worker.wakeAndUnlock(); } catch (e) {}
         }
-        // FIX: was 1500ms — too short, video belum sempet load + play sebelum watch timer mulai
-        // 4000ms kasih waktu deep link diproses + video load dari server + mulai playback
+
+        // PENTING: SELALU paksa target package via -p.
+        // JANGAN pernah fallback ke `am start` tanpa -p — itu membuat Android
+        // melempar URL ke app default (browser / Super Proxy / dll), yang jadi
+        // penyebab "aplikasi lain kebuka" di Device Monitor.
+        let launched = false;
+        try {
+            const out = await worker.execAdb(
+                `shell am start -a android.intent.action.VIEW -p ${pkg} -d "${url}"`);
+            // am start akan print error kalau tidak ada activity yang cocok
+            if (!/Error|Exception|unable to resolve|no activities found/i.test(out || '')) {
+                launched = true;
+            } else {
+                console.log(`[${worker.deviceId}] ⚠️ Deeplink tidak di-handle oleh ${pkg}`);
+            }
+        } catch (e) {
+            console.log(`[${worker.deviceId}] ⚠️ openUrl error: ${e.message}`);
+        }
+
+        // 4000ms kasih waktu deep link diproses + video load + mulai playback
         await worker.sleep(4000);
+
+        // Verifikasi: apakah benar TikTok yang di foreground? Kalau bukan
+        // (mis. link nyangkut di app lain), tutup app asing & buka TikTok lagi
+        // supaya tidak "nyasar" ke Super Proxy / browser.
+        try {
+            const focus = await worker.execAdb(
+                'shell "dumpsys window 2>/dev/null | grep -E \'mCurrentFocus|mFocusedApp\' || true"');
+            const inTikTok = AppConfig.detectRegex().test(focus || '');
+            if (!inTikTok) {
+                console.log(`[${worker.deviceId}] 🚫 Foreground bukan TikTok (${(focus||'').trim().slice(0,80)}), recovery...`);
+                await this.goHome(worker);
+                await worker.sleep(500);
+                await this.openTikTok(worker);
+            }
+        } catch (e) { /* abaikan, lanjut */ }
+
+        return launched;
     }
 
     static async goBack(worker) {

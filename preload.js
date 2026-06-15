@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
     getDevices: () => ipcRenderer.invoke('get-devices'),
+    getTargetApps: () => ipcRenderer.invoke('get-target-apps'),
+    setTargetApp: (appId) => ipcRenderer.invoke('set-target-app', appId),
     getWorkers: () => ipcRenderer.invoke('get-workers'),
     pauseWorker: (deviceId) => ipcRenderer.invoke('pause-worker', deviceId),
     resumeWorker: (deviceId) => ipcRenderer.invoke('resume-worker', deviceId),

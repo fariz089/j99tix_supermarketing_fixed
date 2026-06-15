@@ -21,6 +21,7 @@
  */
 
 const UIHelper = require('./UIHelper');
+const AppConfig = require('../app-config');
 
 // ============================================================
 // MODULE-LEVEL CACHE
@@ -152,7 +153,7 @@ class ProfileBoostTask {
     static async verifyTikTokForeground(worker) {
         try {
             const out = await worker.execAdb(`shell "dumpsys window 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' | head -2"`);
-            return /com\.ss\.android\.ugc\.trill|com\.zhiliaoapp\.musically/.test(out || '');
+            return AppConfig.detectRegex().test(out || '');
         } catch (e) { return false; }
     }
 
