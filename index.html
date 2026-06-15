@@ -292,6 +292,21 @@ https://www.tiktok.com/@user/video/111222333" style="resize: vertical;"></textar
                             💡 Device 1 joins at 0s, Device 2 at 3s, Device 3 at 6s, etc. Set 0 for simultaneous join.
                         </div>
                     </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>🔢 Batch Size (device per kelompok)</label>
+                            <input type="number" id="bl_batch_size" value="10" min="1" max="100">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>⏱️ Delay Antar Batch (detik)</label>
+                            <input type="number" id="bl_batch_delay" value="0" min="0" max="600">
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 6px;">
+                        💡 Kalau "Delay Antar Batch" &gt; 0: device masuk live bertahap per kelompok.
+                        Contoh batch 10, delay 30s → device 1-10 masuk di 0s, 11-20 di 30s, 21-30 di 60s, dst.
+                        Set 0 untuk pakai mode "delay per device" di atas.
+                    </div>
                 </div>
 
                 <!-- Like Settings (Double Tap Layar) -->

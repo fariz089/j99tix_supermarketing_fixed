@@ -21,6 +21,16 @@ class BoostLiveTask {
             commentJitter = 0.25,         // ±25% variasi commentDelay (e.g., 30s → random 22-37s)
             likeJitter = 0.4,             // ±40% variasi likeInterval (e.g., 5s → random 3-7s)
             commentStaggerSeconds = 3,    // offset awal antar device (deviceIndex × X detik)
+            // ============================================================
+            // BATCH JOIN — masuk live bertahap per kelompok device
+            // batchSize = berapa device per kelompok yang masuk bareng
+            // batchDelay = jeda (detik) antar kelompok
+            // Contoh: batchSize=10, batchDelay=30 →
+            //   device 1-10 masuk di 0s, device 11-20 di 30s, 21-30 di 60s, dst
+            // batchDelay = 0 menonaktifkan batching (pakai joinDelay lama).
+            // ============================================================
+            batchSize = 10,
+            batchDelay = 0,
         } = config;
 
         const startTime = Date.now();
@@ -128,8 +138,20 @@ class BoostLiveTask {
                 } catch (e) { }
             }
 
-            // Sequential join delay
-            const joinWait = deviceIndex * joinDelay;
+            // Join delay — batch mode atau linear mode
+            // Batch mode: device dikelompokkan per batchSize, tiap kelompok
+            //   masuk live bertahap dengan jeda batchDelay detik.
+            //   batchIndex = device 1-10 → 0, device 11-20 → 1, dst.
+            // Linear mode (batchDelay = 0): pakai joinDelay lama (deviceIndex × joinDelay).
+            let joinWait;
+            if (batchDelay > 0 && batchSize > 0) {
+                const batchIndex = Math.floor(deviceIndex / batchSize);
+                joinWait = batchIndex * batchDelay;
+                console.log(`[${worker.deviceId}] 🔢 Batch ${batchIndex + 1} (device #${deviceIndex + 1}, ${batchSize}/batch)`);
+            } else {
+                joinWait = deviceIndex * joinDelay;
+            }
+
             if (joinWait > 0) {
                 console.log(`[${worker.deviceId}] 🚪 Join delay: ${joinWait}s`);
                 let waited = 0;

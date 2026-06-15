@@ -469,6 +469,9 @@ async function createBoostLiveJob() {
         comments: comments,
         // Sequential join delay
         joinDelay: parseInt(document.getElementById('bl_join_delay').value) || 0,
+        // Batch join (masuk live bertahap per kelompok device)
+        batchSize: parseInt(document.getElementById('bl_batch_size').value) || 10,
+        batchDelay: parseInt(document.getElementById('bl_batch_delay').value) || 0,
         // Enable/disable toggles
         likeEnabled: likeEnabled,
         commentEnabled: commentEnabled,

@@ -90,7 +90,13 @@ class JobGenerator {
         const joinDelay = config.joinDelay || 0;
         const totalSpread = (deviceIds.length - 1) * joinDelay;
         console.log(`✅ Generated ${tasks.length} boost live tasks`);
-        if (joinDelay > 0) {
+        const batchDelay = config.batchDelay || 0;
+        const batchSize = config.batchSize || 10;
+        if (batchDelay > 0) {
+            const numBatches = Math.ceil(deviceIds.length / batchSize);
+            const batchSpread = (numBatches - 1) * batchDelay;
+            console.log(`   🔢 Batch join: ${batchSize} device/batch, ${batchDelay}s between batches (${numBatches} batches, total spread: ${batchSpread}s)`);
+        } else if (joinDelay > 0) {
             console.log(`   ⏱️ Sequential join: ${joinDelay}s between devices (total spread: ${totalSpread}s)`);
         }
         console.log(`   ❤️ Like: ${config.likeEnabled !== false ? 'ON' : 'OFF'} (delay: ${config.likeDelay || 0}s)`);
